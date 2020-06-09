@@ -330,6 +330,29 @@
     (doto m
       (.put k v))))
 
+(defn update-relation-virtual-index2!
+  ([^RelationVirtualIndex relation tuples]
+   (update-relation-virtual-index2! relation tuples (.layered-range-constraints relation)))
+  ([^RelationVirtualIndex relation tuples layered-range-constraints]
+   (let [
+         tree (reduce
+               (fn [acc tuple]
+                 (tree-map-put-in acc tuple nil))
+               (TreeMap. mem/buffer-comparator)
+               tuples)
+         ;;_ ;;(def tree tree)
+
+         root-level (wrap-with-range-constraints
+                     (new-sorted-virtual-index tree)
+                     (get layered-range-constraints 0))
+         ;; _ (def root-level root-level)
+         state ^RelationVirtualIndexState (.state relation)]
+     (set! (.tree state) tree)
+     (set! (.path state) [])
+     (set! (.indexes state) [root-level])
+     (set! (.key state) nil)
+     relation)))
+
 (defn update-relation-virtual-index!
   ([^RelationVirtualIndex relation tuples]
    (update-relation-virtual-index! relation tuples (.layered-range-constraints relation)))

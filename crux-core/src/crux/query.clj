@@ -543,6 +543,20 @@
             (str "Clause refers to unknown variable: "
                  var " " (cio/pr-edn-str clause))))))
 
+(defn optional [var->bindings return idx-id [e a]]
+  (let [a (crux.codec/->id-buffer a)
+        var-binding ^VarBinding (get var->bindings e)]
+    (fn [index-store db idx-id->idx ^List join-keys]
+      (let [eid (.get join-keys (.result-index var-binding))
+            pred-result (crux.db/aev index-store
+                                     a
+                                     eid
+                                     nil
+                                     (:entity-resolver-fn db))]
+        (when-let [values (some->> pred-result not-empty (mapv vector))]
+          (idx/update-relation-virtual-index2! (get idx-id->idx idx-id) values))
+        true))))
+
 (defn- build-pred-constraints [pred-clause+idx-ids var->bindings]
   (for [[{:keys [pred return] :as clause} idx-id] pred-clause+idx-ids
         :let [{:keys [pred-fn args]} pred
@@ -551,12 +565,14 @@
     (do (validate-existing-vars var->bindings clause pred-vars)
         {:join-depth pred-join-depth
          :constraint-fn
-         (fn pred-constraint [index-store db idx-id->idx join-keys]
-           (let [[pred-fn & args] (for [arg (cons pred-fn args)]
-                                    (if (logic-var? arg)
-                                      (bound-result-for-var index-store var->bindings join-keys arg)
-                                      arg))]
-             (let [pred-result (apply pred-fn args)]
+         (if (= optional pred-fn)
+           (optional var->bindings return idx-id args)
+           (fn pred-constraint [index-store db idx-id->idx join-keys]
+             (let [[pred-fn & args] (for [arg (cons pred-fn args)]
+                                      (if (logic-var? arg)
+                                        (bound-result-for-var index-store var->bindings join-keys arg)
+                                        arg))
+                   pred-result (apply pred-fn args)]
                (if return
                  (if-let [values (not-empty (mapv vector (c/vectorize-value pred-result)))]
                    (do (idx/update-relation-virtual-index! (get idx-id->idx idx-id) values)

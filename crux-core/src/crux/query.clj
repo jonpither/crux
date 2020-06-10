@@ -557,7 +557,57 @@
           (idx/update-relation-virtual-index2! (get idx-id->idx idx-id) values))
         true))))
 
+(defn get-attr [e a]
+  (throw (UnsupportedOperationException.)))
+
+(defn get-attr-fn? [{:keys [pred return] :as clause}]
+  (let [{:keys [pred-fn args]} pred]
+    (and (= pred-fn get-attr)
+         (= 2 (count args))
+         return
+         (logic-var? (first args))
+         (literal? (second args)))))
+
 (defn- build-pred-constraints [pred-clause+idx-ids var->bindings]
+  (for [[{:keys [pred return] :as clause} idx-id] pred-clause+idx-ids
+        :let [{:keys [pred-fn args]} pred
+              pred-vars (filter logic-var? (cons pred-fn args))
+              pred-join-depth (calculate-constraint-join-depth var->bindings pred-vars)]]
+    (do (validate-existing-vars var->bindings clause pred-vars)
+        {:join-depth pred-join-depth
+         :constraint-fn
+         (if (get-attr-fn? clause)
+           (let [e-result-index (.result-index ^VarBinding (get var->bindings (first args)))
+                 attr (second args)]
+             #_(fn pred-get-attr-doc-store-constraint [index-store {:keys [entity-resolver-fn] {:keys [document-store]} :query-engine :as db} idx-id->idx ^List join-keys]
+               (let [content-hash (c/new-id (entity-resolver-fn (.get join-keys e-result-index)))
+                     vs (-> (db/fetch-docs document-store #{content-hash})
+                            (get-in [content-hash attr]))]
+                 (if-let [values (not-empty (c/vectorize-value vs))]
+                   (do (idx/update-relation-virtual-index! (get idx-id->idx idx-id) (mapv vector values))
+                       true)
+                   false)))
+             (fn pred-get-attr-aev-constraint [index-store {:keys [entity-resolver-fn] :as db} idx-id->idx ^List join-keys]
+               (let [e (.get join-keys e-result-index)
+                     vs (db/aev index-store attr e nil entity-resolver-fn)]
+                 (if-let [values (not-empty vs)]
+                   (do (idx/update-relation-virtual-index2! (get idx-id->idx idx-id) (mapv vector values))
+                       true)
+                   false))))
+           (fn pred-constraint [index-store db idx-id->idx join-keys]
+             (let [[pred-fn & args] (for [arg (cons pred-fn args)]
+                                      (if (logic-var? arg)
+                                        (bound-result-for-var index-store var->bindings join-keys arg)
+                                        arg))]
+               (let [pred-result (apply pred-fn args)]
+                 (if return
+                   (if-let [values (not-empty (mapv vector (c/vectorize-value pred-result)))]
+                     (do (idx/update-relation-virtual-index! (get idx-id->idx idx-id) values)
+                         true)
+                     false)
+                   pred-result)))))})))
+
+#_(defn- build-pred-constraints [pred-clause+idx-ids var->bindings]
   (for [[{:keys [pred return] :as clause} idx-id] pred-clause+idx-ids
         :let [{:keys [pred-fn args]} pred
               pred-vars (filter logic-var? (cons pred-fn args))

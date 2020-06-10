@@ -100,17 +100,16 @@
   (->StandaloneTxLog (Executors/newSingleThreadExecutor (cio/thread-factory "crux-standalone-tx-log"))
                      (:kv-store event-log)))
 
-(defrecord StandaloneDocumentStore [event-log-kv-store event-log-object-store]
+(defrecord StandaloneDocumentStore [event-log-kv-store event-log-object-store snapshot]
   db/DocumentStore
   (submit-docs [this id-and-docs]
     (db/put-objects event-log-object-store id-and-docs))
 
   (fetch-docs [this ids]
-    (with-open [snapshot (kv/new-snapshot event-log-kv-store)]
-      (db/get-objects event-log-object-store snapshot ids))))
+    (db/get-objects event-log-object-store snapshot ids)))
 
 (defn- ->document-store [{{:keys [kv-store object-store]} ::event-log} _]
-  (->StandaloneDocumentStore kv-store object-store))
+  (->StandaloneDocumentStore kv-store object-store (kv/new-snapshot kv-store)))
 
 (def ^:private event-log-args
   {::event-log-kv-store {:doc "The KV store to use for the standalone event log"

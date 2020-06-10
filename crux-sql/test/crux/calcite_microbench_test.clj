@@ -48,7 +48,7 @@
 (comment
   (load-docs! (user/crux-node))
   (fix/transact! (user/crux-node) (tf/tpch-tables->crux-sql-schemas))
-  (def db (c/db (user/crux-node)))
+  (def db_ (c/db (user/crux-node)))
   (def conn (cal/jdbc-connection (user/crux-node)))
   (def p (prepared-query conn "SELECT c_name FROM CUSTOMER"))
 
@@ -57,37 +57,58 @@
                                              :where [[e :l_partkey ?n]]}))})))
 
   (println (with-timing*
-             (fn [] {:count (count (c/q db '{:find [l_orderkey],
-                                             :where [[e :l_orderkey l_orderkey]
-                                                     [e :l_partkey l_partkey]
-                                                     [e :l_suppkey l_suppkey]
-                                                     [e :l_linenumber l_linenumber]
-                                                     [e :l_quantity l_quantity]
-                                                     [e :l_extendedprice l_extendedprice]
-                                                     [e :l_discount l_discount]
-                                                     [e :l_tax l_tax]
-                                                     [e :l_returnflag l_returnflag]
-                                                     [e :l_linestatus l_linestatus]
-                                                     [e :l_shipdate l_shipdate]
-                                                     [e :l_commitdate l_commitdate]]
-                                             :timeout 100000}))}))) ;; ~ 30 secs
+             (fn [] {:count (count (c/q (c/db (user/crux-node)) '{:find [l_orderkey, l_partkey, l_suppkey, l_linenumber],
+                                                                  :where [[e :l_orderkey l_orderkey]
+                                                                          [e :l_partkey l_partkey]
+                                                                          [e :l_suppkey l_suppkey]
+                                                                          [e :l_linenumber l_linenumber]
+                                                                          [e :l_quantity l_quantity]
+                                                                          [e :l_extendedprice l_extendedprice]
+                                                                          [e :l_discount l_discount]
+                                                                          [e :l_tax l_tax]
+                                                                          [e :l_returnflag l_returnflag]
+                                                                          [e :l_linestatus l_linestatus]
+                                                                          [e :l_shipdate l_shipdate]
+                                                                          [e :l_commitdate l_commitdate]
+                                                                          ]
+                                                                  :timeout 100000}))}))) ;; ~ 30 secs
 
   (println (with-timing*
-             (fn [] {:count (count (c/q db '{:find [l_orderkey, l_partkey, l_suppkey, l_linenumber],
-                                             :where [[e :l_orderkey l_orderkey]
-                                                     [(crux.query/optional e :l_partkey) l_partkey]
-                                                     [(crux.query/optional e :l_suppkey) l_suppkey]
-                                                     [(crux.query/optional e :l_linenumber) l_linenumber]
-                                                     [(crux.query/optional e :l_quantity) l_quantity40]
-                                                     [(crux.query/optional e :l_extendedprice) l_extendedprice]
-                                                     [(crux.query/optional e :l_discount) l_discount]
-                                                     [(crux.query/optional e :l_tax) l_tax]
-                                                     [(crux.query/optional e :l_returnflag) l_returnflag]
-                                                     [(crux.query/optional e :l_linestatus) l_linestatus]
-                                                     [(crux.query/optional e :l_shipdate) l_shipdate]
-                                                     [(crux.query/optional e :l_commitdate) l_commitdate]]
+             (fn [] {:count (count (c/q (c/db (user/crux-node)) '{:find [l_orderkey, l_partkey, l_suppkey, l_linenumber],
+                                                                  :where [[e :l_orderkey l_orderkey]
+                                                                          [(crux.query/optional e :l_partkey) l_partkey]
+                                                                          [(crux.query/optional e :l_suppkey) l_suppkey]
+                                                                          [(crux.query/optional e :l_linenumber) l_linenumber]
+                                                                          [(crux.query/optional e :l_quantity) l_quantity40]
+                                                                          [(crux.query/optional e :l_extendedprice) l_extendedprice]
+                                                                          [(crux.query/optional e :l_discount) l_discount]
+                                                                          [(crux.query/optional e :l_tax) l_tax]
+                                                                          [(crux.query/optional e :l_returnflag) l_returnflag]
+                                                                          [(crux.query/optional e :l_linestatus) l_linestatus]
+                                                                          [(crux.query/optional e :l_shipdate) l_shipdate]
+                                                                          [(crux.query/optional e :l_commitdate) l_commitdate]
+                                                                          ]
+                                                                  :timeout 100000}))})))
 
-                                             :timeout 100000}))})))
+  (println (with-timing*
+             (fn [] {:count (count (c/q (c/db (user/crux-node)) '{:find [l_orderkey, l_partkey, l_suppkey, l_linenumber],
+                                                                  :where [[e :l_orderkey l_orderkey]
+                                                                          [(crux.query/get-attr e :l_partkey) l_partkey]
+                                                                          [(crux.query/get-attr e :l_suppkey) l_suppkey]
+                                                                          [(crux.query/get-attr e :l_linenumber) l_linenumber]
+                                                                          [(crux.query/get-attr e :l_quantity) l_quantity44]
+                                                                          [(crux.query/get-attr e :l_extendedprice) l_extendedprice]
+                                                                          [(crux.query/get-attr e :l_discount) l_discount]
+                                                                          [(crux.query/get-attr e :l_tax) l_tax]
+                                                                          [(crux.query/get-attr e :l_returnflag) l_returnflag]
+                                                                          [(crux.query/get-attr e :l_linestatus) l_linestatus]
+                                                                          [(crux.query/get-attr e :l_shipdate) l_shipdate]
+                                                                          [(crux.query/get-attr e :l_commitdate) l_commitdate4]
+                                                                          ]
+                                                                  :timeout 100000}))})))
+
+
+
 
   (println (with-timing*
              (fn [] {:count (count (c/q db '{:find [l_orderkey],
@@ -167,7 +188,7 @@
   (println (with-timing*
              (fn [] {:count (count (c/q db '{:find [e]
                                              :where [[e :c_acctbal ?bal0]
-                                                     [(crux.query/optional e :c_name) ?c_name1]]}))})))
+                                                     [(crux.query/get-attr e :c_name) ?c_name3]]}))})))
 
   (println (with-timing*
              (fn [] {:count (count (c/q db '{:find [e]

@@ -605,9 +605,42 @@
                          :crux.sql.table/columns {'id :keyword, 'name :varchar 'planet :varchar}}])
   (fix/transact! *api* [{:crux.db/id :person/ivan :name "Ivan" :planet "earth"}
                         {:crux.db/id :person/igor :name "Igor" :planet "not-earth"}])
+
   (t/testing "retrieve data"
     (t/is (= #{{:id ":person/ivan", :name "Ivan", :planet "earth"}}
-             (set (query "SELECT * FROM PERSON"))))))
+             (set (query "SELECT * FROM PERSON")))))
+
+  (let [{:keys [:crux.db/valid-time] :as t}
+        (last (c/entity-history (c/db *api*) :crux.sql.schema/person :asc))]
+    (fix/transact! *api* [{:crux.db/id :crux.sql.schema/person
+                           :crux.sql.table/name "person"
+                           :crux.sql.table/query {:find ['id 'name 'planet]
+                                                  :where [['id :name 'name]
+                                                          ['id :planet 'planet]
+                                                          ['id :planet "mars"]]}
+                           :crux.sql.table/columns {'id :keyword, 'name :varchar 'planet :varchar}}])
+    (assert (not (seq (query "SELECT * FROM PERSON"))))
+    (let [schemas (query "SELECT * FROM TABLE_HISTORY ORDER BY VALID_TIME DESC")]
+      (t/is (= (read-string (:query (first schemas)))
+               {:crux.db/id :crux.sql.schema/person
+                :crux.sql.table/name "person"
+                :crux.sql.table/query {:find ['id 'name 'planet]
+                                       :where [['id :name 'name]
+                                               ['id :planet 'planet]
+                                               ['id :planet "mars"]]}
+                :crux.sql.table/columns {'id :keyword, 'name :varchar 'planet :varchar}}))
+      (t/is (= (read-string (:query (second schemas)))
+               {:crux.db/id :crux.sql.schema/person
+                :crux.sql.table/name "person"
+                :crux.sql.table/query {:find ['id 'name 'planet]
+                                       :where [['id :name 'name]
+                                               ['id :planet 'planet]
+                                               ['id :planet "earth"]]}
+                :crux.sql.table/columns {'id :keyword, 'name :varchar 'planet :varchar}})))
+
+    ;; Summer time beef:
+    ;;(t/is (= valid-time (:valid_time (second ))))
+    ))
 
 (t/deftest test-arithmetic
   (fix/transact! *api* [{:crux.db/id :human/ivan :name "Ivan" :homeworld "Earth" :alive true :age 21}])

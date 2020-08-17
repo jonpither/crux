@@ -393,7 +393,7 @@
                           [(keyword (.toLowerCase (.getName f))) (int ^Integer (.get f nil)) ]))
                supported-types))
 
-(defn java-sql-types->calcite-sql-type [java-sql-type]
+(defn ^SqlTypeName java-sql-types->calcite-sql-type [java-sql-type]
   (or (get mapped-types java-sql-type)
       (some-> java-sql-type java-sql-types SqlTypeName/getNameForJdbcType)
       (throw (IllegalArgumentException. (str "Unrecognised java.sql.Types: " java-sql-type)))))
@@ -402,7 +402,7 @@
   (string/replace (string/upper-case (str c)) #"^\?" ""))
 
 (defn row-type [^RelDataTypeFactory type-factory node {:keys [:crux.sql.table/query :crux.sql.table/columns] :as table-schema}]
-  (let [field-info  (RelDataTypeFactory$Builder. type-factory)]
+  (let [field-info (RelDataTypeFactory$Builder. type-factory)]
     (doseq [c (:find query)]
       (let [col-name (->column-name c)
             col-def (columns c)
@@ -425,13 +425,40 @@
                             :where [[e :crux.sql.table/name]]
                             :full-results? true}))))
 
+(defn- table-versions [node]
+  (let [db (crux/db node)]
+    (mapv to-array
+          (for [{:keys [:crux.db/id] :as schema} (lookup-schema node)
+                history (crux/entity-history db id :desc {:with-docs? true})]
+            [(:crux.sql.table/name schema)
+             (prn-str (:crux.db/doc history))
+             (inst-ms (:crux.db/valid-time history))
+             (inst-ms (:crux.tx/tx-time history))]))))
+
+(defn -create [node]
+  (proxy
+      [org.apache.calcite.schema.impl.AbstractTable
+       org.apache.calcite.schema.ProjectableFilterableTable]
+      []
+    (getRowType [^RelDataTypeFactory type-factory]
+      (let [field-info (RelDataTypeFactory$Builder. type-factory)]
+        (doto field-info
+          (.add "TABLE_NAME" (java-sql-types->calcite-sql-type :varchar))
+          (.add "QUERY" (java-sql-types->calcite-sql-type :varchar))
+          (.add "VALID_TIME" (java-sql-types->calcite-sql-type :timestamp))
+          (.add "TRANSACTION_TIME" (java-sql-types->calcite-sql-type :timestamp)))
+        (.build field-info)))
+    (scan [root filters projects]
+      (org.apache.calcite.linq4j.Linq4j/asEnumerable
+       ^java.util.List (table-versions node)))))
+
 (defn create-schema [parent-schema name operands]
   (let [node (get !crux-nodes (get operands "CRUX_NODE"))
         scan-only? (get operands "SCAN_ONLY")]
     (assert node)
     (proxy [org.apache.calcite.schema.impl.AbstractSchema] []
       (getTableMap []
-        (into {}
+        (into {"TABLE_HISTORY" (-create node)}
               (for [table-schema (lookup-schema node)]
                 (do (when-not (s/valid? ::table table-schema)
                       (throw (IllegalStateException. (str "Invalid table schema: " (prn-str table-schema)))))

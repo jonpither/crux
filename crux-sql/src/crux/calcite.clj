@@ -431,7 +431,8 @@
           (for [{:keys [:crux.db/id] :as schema} (lookup-schema node)
                 history (crux/entity-history db id :desc {:with-docs? true})]
             [(:crux.sql.table/name schema)
-             (prn-str (:crux.db/doc history))
+             (prn-str (:crux.sql.table/query (:crux.db/doc history)))
+             (prn-str (:crux.sql.table/columns (:crux.db/doc history)))
              (inst-ms (:crux.db/valid-time history))
              (inst-ms (:crux.tx/tx-time history))]))))
 
@@ -445,6 +446,7 @@
         (doto field-info
           (.add "TABLE_NAME" (java-sql-types->calcite-sql-type :varchar))
           (.add "QUERY" (java-sql-types->calcite-sql-type :varchar))
+          (.add "COLUMNS" (java-sql-types->calcite-sql-type :varchar))
           (.add "VALID_TIME" (java-sql-types->calcite-sql-type :timestamp))
           (.add "TRANSACTION_TIME" (java-sql-types->calcite-sql-type :timestamp)))
         (.build field-info)))

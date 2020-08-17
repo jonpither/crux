@@ -622,21 +622,15 @@
     (assert (not (seq (query "SELECT * FROM PERSON"))))
     (let [schemas (query "SELECT * FROM TABLE_HISTORY ORDER BY VALID_TIME DESC")]
       (t/is (= (read-string (:query (first schemas)))
-               {:crux.db/id :crux.sql.schema/person
-                :crux.sql.table/name "person"
-                :crux.sql.table/query {:find ['id 'name 'planet]
-                                       :where [['id :name 'name]
-                                               ['id :planet 'planet]
-                                               ['id :planet "mars"]]}
-                :crux.sql.table/columns {'id :keyword, 'name :varchar 'planet :varchar}}))
+               {:find ['id 'name 'planet]
+                :where [['id :name 'name]
+                        ['id :planet 'planet]
+                        ['id :planet "mars"]]}))
       (t/is (= (read-string (:query (second schemas)))
-               {:crux.db/id :crux.sql.schema/person
-                :crux.sql.table/name "person"
-                :crux.sql.table/query {:find ['id 'name 'planet]
-                                       :where [['id :name 'name]
-                                               ['id :planet 'planet]
-                                               ['id :planet "earth"]]}
-                :crux.sql.table/columns {'id :keyword, 'name :varchar 'planet :varchar}})))
+               {:find ['id 'name 'planet]
+                :where [['id :name 'name]
+                        ['id :planet 'planet]
+                        ['id :planet "earth"]]})))
 
     ;; Summer time beef:
     ;;(t/is (= valid-time (:valid_time (second ))))

@@ -94,10 +94,12 @@
                          snapshot)))
 
   (store [_ kvs]
-    (with-open [wb (WriteBatch.)]
-      (doseq [[k v] kvs]
-        (.put wb (mem/direct-byte-buffer k) (mem/direct-byte-buffer v)))
-      (.write db write-options wb)))
+    (crux.vega/vega-time
+     :rocks/store
+     (with-open [wb (WriteBatch.)]
+       (doseq [[k v] kvs]
+         (.put wb (mem/direct-byte-buffer k) (mem/direct-byte-buffer v)))
+       (.write db write-options wb))))
 
   (delete [_ ks]
     (with-open [wb (WriteBatch.)]

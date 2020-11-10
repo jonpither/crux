@@ -23,13 +23,14 @@
                                               :spec ::sys/time-unit}}}
   ^com.codahale.metrics.ConsoleReporter
   [{:keys [^MetricRegistry registry stream metric-filter locale clock report-frequency rate-unit duration-unit]}]
+  (let [report-frequency (Duration/ofSeconds 5)]
 
-  (-> (ConsoleReporter/forRegistry registry)
-      (cond-> stream (.outputTo stream)
-              locale (.formattedFor ^Locale locale)
-              clock (.withClock clock)
-              rate-unit (.convertRatesTo rate-unit)
-              duration-unit (.convertDurationsTo duration-unit)
-              metric-filter (.filter metric-filter))
-      (.build)
-      (doto (.start (.toMillis ^Duration report-frequency) TimeUnit/MILLISECONDS))))
+    (-> (ConsoleReporter/forRegistry registry)
+        (cond-> stream (.outputTo stream)
+                locale (.formattedFor ^Locale locale)
+                clock (.withClock clock)
+                rate-unit (.convertRatesTo rate-unit)
+                duration-unit (.convertDurationsTo duration-unit)
+                metric-filter (.filter metric-filter))
+        (.build)
+        (doto (.start (.toMillis ^Duration report-frequency) TimeUnit/MILLISECONDS)))))

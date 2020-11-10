@@ -20,7 +20,9 @@
                                                    :default true
                                                    :spec ::sys/boolean}}}
   [{:keys [registry with-index-store-metrics? with-query-metrics?] :as opts}]
-  (let [deps (select-keys opts #{:crux/node :crux/index-store :crux/bus})]
+  (let [with-query-metrics? false
+        with-index-store-metrics? false
+        deps (select-keys opts #{:crux/node :crux/index-store :crux/bus})]
     {:registry (cond-> registry
                  with-index-store-metrics? (doto (index-store-metrics/assign-listeners deps))
                  with-query-metrics? (doto (query-metrics/assign-listeners deps)))}))

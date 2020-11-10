@@ -2,6 +2,7 @@
   (:require [clojure.set :as set]
             [clojure.spec.alpha :as s]
             [clojure.tools.logging :as log]
+            [crux.vega]
             [crux.error :as err]
             [crux.bus :as bus]
             [crux.cache.nop :as nop-cache]
@@ -297,36 +298,43 @@
     (swap! !tx-events into tx-events)
 
     (try
-      (index-docs this (fetch-docs forked-document-store (txc/tx-events->doc-hashes tx-events)))
-      (let [forked-deps {:index-store forked-index-store
-                         :document-store forked-document-store
-                         :query-engine (assoc query-engine :index-store forked-index-store)}
-            abort? (loop [[tx-event & more-tx-events] tx-events]
-                     (when tx-event
-                       (let [{:keys [new-tx-events abort?]}
-                             (with-open [index-snapshot (db/open-index-snapshot forked-index-store)]
-                               (let [{:keys [pre-commit-fn tx-events evict-eids etxs docs]}
-                                     (index-tx-event (-> tx-event
-                                                         (with-tx-fn-args forked-deps))
-                                                     tx
-                                                     (assoc forked-deps :index-snapshot index-snapshot))]
-                                 (db/submit-docs forked-document-store docs)
+      (crux.vega/vega-time
+       :tx/index-docs
+       (index-docs this (fetch-docs forked-document-store (txc/tx-events->doc-hashes tx-events))))
 
-                                 (if (and pre-commit-fn (not (pre-commit-fn)))
-                                   {:abort? true}
+      (crux.vega/vega-time
+       :tx/index-tx-events
+       (let [forked-deps {:index-store forked-index-store
+                          :document-store forked-document-store
+                          :query-engine (assoc query-engine :index-store forked-index-store)}
+             abort? (loop [[tx-event & more-tx-events] tx-events]
+                      (when tx-event
+                        (let [{:keys [new-tx-events abort?]}
+                              (with-open [index-snapshot (db/open-index-snapshot forked-index-store)]
+                                (let [{:keys [pre-commit-fn tx-events evict-eids etxs docs]}
+                                      (crux.vega/vega-time
+                                       :tx/index-tx-event
+                                       (index-tx-event (-> tx-event
+                                                           (with-tx-fn-args forked-deps))
+                                                       tx
+                                                       (assoc forked-deps :index-snapshot index-snapshot)))]
+                                  (db/submit-docs forked-document-store docs)
 
-                                   (do
-                                     (doto forked-index-store
-                                       (db/index-docs docs)
-                                       (db/unindex-eids evict-eids)
-                                       (db/index-entity-txs tx etxs))
-                                     {:new-tx-events tx-events}))))]
-                         (or abort?
-                             (recur (concat new-tx-events more-tx-events))))))]
-        (when abort?
-          (reset! !state :abort-only))
+                                  (if (and pre-commit-fn (not (pre-commit-fn)))
+                                    {:abort? true}
 
-        (not abort?))
+                                    (do
+                                      (doto forked-index-store
+                                        (db/index-docs docs)
+                                        (db/unindex-eids evict-eids)
+                                        (db/index-entity-txs tx etxs))
+                                      {:new-tx-events tx-events}))))]
+                          (or abort?
+                              (recur (concat new-tx-events more-tx-events))))))]
+         (when abort?
+           (reset! !state :abort-only))
+
+         (not abort?)))
 
       (catch Throwable e
         (reset! !error e)
@@ -335,31 +343,34 @@
         (throw e))))
 
   (commit [this]
-    (when-not (compare-and-set! !state :open :committed)
-      (throw (IllegalStateException. "Transaction marked as " (name @!state))))
+    (crux.vega/vega-time
+     :tx/commit
+     (do
+       (when-not (compare-and-set! !state :open :committed)
+         (throw (IllegalStateException. "Transaction marked as " (name @!state))))
 
-    (when (:fork-at tx)
-      (throw (IllegalStateException. "Can't commit from fork.")))
+       (when (:fork-at tx)
+         (throw (IllegalStateException. "Can't commit from fork.")))
 
-    (when-let [evict-eids (not-empty (fork/newly-evicted-eids forked-index-store))]
-      (let [{:keys [tombstones]} (db/unindex-eids index-store evict-eids)]
-        (db/submit-docs document-store tombstones)))
+       (when-let [evict-eids (not-empty (fork/newly-evicted-eids forked-index-store))]
+         (let [{:keys [tombstones]} (db/unindex-eids index-store evict-eids)]
+           (db/submit-docs document-store tombstones)))
 
-    (when-let [new-docs (fork/new-docs forked-document-store)]
-      (db/index-docs index-store new-docs)
-      (update-stats this (map doc-predicate-stats (vals new-docs)))
+       (when-let [new-docs (fork/new-docs forked-document-store)]
+         (db/index-docs index-store new-docs)
+         (update-stats this (map doc-predicate-stats (vals new-docs)))
 
-      (db/submit-docs document-store new-docs)
+         (db/submit-docs document-store new-docs)
 
-      ;; ensure the docs are available before we commit the tx, see #1175
-      (fetch-docs document-store (keys new-docs)))
+         ;; ensure the docs are available before we commit the tx, see #1175
+         (fetch-docs document-store (keys new-docs)))
 
-    (db/index-entity-txs index-store tx (fork/new-etxs forked-index-store))
+       (db/index-entity-txs index-store tx (fork/new-etxs forked-index-store))
 
-    (bus/send bus {:crux/event-type ::indexed-tx,
-                   ::submitted-tx tx,
-                   :committed? true
-                   ::txe/tx-events @!tx-events}))
+       (bus/send bus {:crux/event-type ::indexed-tx,
+                      ::submitted-tx tx,
+                      :committed? true
+                      ::txe/tx-events @!tx-events}))))
 
   (abort [_]
     (swap! !state (fn [state]

@@ -6,24 +6,64 @@
 
 (t/use-fixtures :each fix/with-node)
 
-(s/def ::operator #{:$eq :$lt :$gt})
-(s/def ::val (s/map-of ::operator any?))
-(s/def ::query (s/map-of keyword ::val))
+(def operands {:$eq '=
+               :$gt '>
+               :$gte '>=
+               :$lt '<
+               :$lte '<=})
+
+;; ;; so nice to get the spec working
+;; (s/def ::nested #{:$not})
+;; (s/def ::operator (set (keys operands)))
+;; (s/def ::val (s/map-of ::operator any?))
+;; (s/def ::query (s/map-of keyword ::val))
+
+;; interesting. Or is going to be quite hard
+;; {
+;;     "year": 1977,
+;;     "$or": [
+;;         { "director": "George Lucas" },
+;;         { "director": "Steven Spielberg" }
+;;     ]
+;; }
+
+;; Not
+;; {
+;;     "year": {
+;;         "$gte": 1900
+;;     },
+;;     "year": {
+;;         "$lte": 1903
+;;     },
+;;     "$not": {
+;;         "year": 1901
+;;     }
+;; }
+
+(defn- ->where [k v]
+  (println "h" v)
+  (if (map? v)
+    (case k
+      "$not"
+      (list 'not
+            (apply concat (for [[k v] v]
+                            (->where k v))))
+
+      (let [[op v] (first v)
+            a (gensym k)]
+        [['e k a]
+         [(list (operands op) a v)]]))
+    [['e k v]]))
 
 (defn- select->datalog [q]
+  (println "1 q" q)
   (let [q (into {} (map (fn [[k v]]
-                          [k (if (map? v) v {:$eq v})])) q)]
+                          [k (if (coll? v) v {:$eq v})])) q)]
     (s/assert ::query q)
+    (println "Confirmed "q)
     {:find ['e]
      :where (reduce into [] (for [[k v] q]
-                              (if (map? v)
-                                (let [[op v] (first v)
-                                      a (gensym k)]
-                                  [['e k a]
-                                   [(list ({:$eq '=
-                                            :$gt '>
-                                            :$lt '<} op) a v)]])
-                                [['e k v]])))}))
+                              (->where k v)))}))
 
 (defn- select [q]
   (let [db (api/db *api*)]
@@ -44,22 +84,47 @@
 
 (t/deftest test-operator
   ;; https://docs.couchdb.org/en/stable/api/database/find.html#implicit-operators
-  (let [ivan {:crux.db/id :ivan :age 10}]
-    (fix/transact! *api* (fix/people [ivan]))
+  (fix/transact! *api* (fix/people [{:crux.db/id :ivan :age 10}]))
 
-    (t/testing "eq"
-      (t/is (= :ivan (:crux.db/id (first (select {:age {:$eq 10}}))))))
+  (t/testing "eq"
+    (t/is (= :ivan (:crux.db/id (first (select {:age {:$eq 10}}))))))
 
-    (t/testing "gt"
-      (t/is (= :ivan (:crux.db/id (first (select {:age {:$gt 9}})))))
-      (t/is (not (seq (select {:age {:$gt 11}})))))
+  (t/testing "gt"
+    (t/is (= :ivan (:crux.db/id (first (select {:age {:$gt 9}})))))
+    (t/is (not (seq (select {:age {:$gt 11}})))))
 
-    (t/testing "lt"
-      (t/is (= :ivan (:crux.db/id (first (select {:age {:$lt 11}})))))
-      (t/is (not (seq (select {:age {:$lt 9}})))))
+  (t/testing "lt"
+    (t/is (= :ivan (:crux.db/id (first (select {:age {:$lt 11}})))))
+    (t/is (not (seq (select {:age {:$lt 9}})))))
 
-    (t/is (thrown-with-msg? clojure.lang.ExceptionInfo #"Spec assertion failed"
-                            (select {:age {:$unknown 11}})))))
+  (t/testing "than equal"
+    (t/is (= :ivan (:crux.db/id (first (select {:age {:$lte 11}})))))
+    (t/is (= :ivan (:crux.db/id (first (select {:age {:$lte 10}})))))
+    (t/is (= :ivan (:crux.db/id (first (select {:age {:$gte 9}})))))
+    (t/is (= :ivan (:crux.db/id (first (select {:age {:$gte 10}}))))))
+
+  (t/is (thrown-with-msg? clojure.lang.ExceptionInfo #"Spec assertion failed"
+                          (select {:age {:$unknown 11}}))))
+
+(t/deftest test-not
+  (fix/transact! *api* (fix/people [{:crux.db/id :ivan :name "Ivan"}
+                                    {:crux.db/id :fred :name "Fred"}
+                                    {:crux.db/id :jim :name "Jim"}]))
+
+  (println "got" (select {:$not [{:name "Ivan"}]}))
+
+  (t/is (= #{:fred :jim} (set (map :crux.db/id (select {:$not [{:name "Ivan"}]}))))))
+
+#_(t/deftest test-or
+  ;; "$or": [
+  ;;         { "director": "George Lucas" },
+  ;;         { "director": "Steven Spielberg" }
+  ;;         ]
+  (fix/transact! *api* (fix/people [{:crux.db/id :ivan :name "Ivan"}
+                                    {:crux.db/id :fred :name "Fred"}
+                                    {:crux.db/id :jim :name "Jim"}]))
+
+  (t/is (= #{:ivan :fred} (set (map :crux.db/id (select {:$or [{:name "Ivan"} {:name "Fred"}]}))))))
 
 ;; todo in
 ;; todo elemMatch

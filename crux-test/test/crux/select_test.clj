@@ -41,14 +41,19 @@
     (t/is (= :ivan (:crux.db/id (first (select {:age {:$gte 10}}))))))
 
   #_(t/is (thrown-with-msg? clojure.lang.ExceptionInfo #"Spec assertion failed"
-                          (select {:age {:$unknown 11}}))))
+                            (select {:age {:$unknown 11}}))))
+
+(t/deftest test-and
+  (fix/transact! *api* (fix/people [{:crux.db/id :ivan :name "Ivan"}
+                                    {:crux.db/id :fred :name "Fred"}
+                                    {:crux.db/id :jim :name "Jim" :surname "Bob"}]))
+
+  (t/is (= #{:jim} (set (map :crux.db/id (select {:$and [{:name "Ivan" :surname "Bob"}]}))))))
 
 (t/deftest test-not
   (fix/transact! *api* (fix/people [{:crux.db/id :ivan :name "Ivan"}
                                     {:crux.db/id :fred :name "Fred"}
                                     {:crux.db/id :jim :name "Jim"}]))
-
-  (println "got" (select {:$not [{:name "Ivan"}]}))
 
   (t/is (= #{:fred :jim} (set (map :crux.db/id (select {:$not [{:name "Ivan"}]}))))))
 

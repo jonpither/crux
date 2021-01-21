@@ -2,9 +2,16 @@
   (:require [clojure.test :as t]
             [clojure.walk :refer [postwalk]]
             [crux.api :as api]
-            [crux.fixtures :as fix :refer [*api*]]))
+            [crux.fixtures :as fix :refer [*api*]]
+            [cheshire.core :as json]
+            [clojure.java.io :as io]))
 
-(t/use-fixtures :each fix/with-node)
+(defn- with-test-data [f]
+  (let [{:keys [docs]} (json/parse-string (slurp (io/resource "data/select_test.json")) keyword)]
+    (fix/transact! *api* docs)
+    (f)))
+
+(t/use-fixtures :each fix/with-node with-test-data)
 
 (def operators {:$eq '=
                 :$gt '>
@@ -68,7 +75,21 @@
   (let [db (api/db *api*)]
     (map (partial api/entity db) (map first (api/q db (doto (->datalog q) prn))))))
 
-(t/deftest test-select
+;; Ported from Couch:
+
+(t/deftest test-simple-find
+  (let [docs (select {:age {:$lt 35}})]
+
+    (t/is (= 3 (count docs)))
+
+    ;; TODO, they do ordering
+    ;; assert docs[0]["user_id"] == 9
+    ;; assert docs[1]["user_id"] == 1
+    ;; assert docs[2]["user_id"] == 7
+
+    (t/is (= #{9 1 7} (set (map :user_id docs))))))
+
+#_(t/deftest test-select
   ;; https://docs.couchdb.org/en/stable/api/database/find.html
   (let [ivan {:crux.db/id :ivan :name "Ivan" :surname "Ivanof"}]
     (fix/transact! *api* (fix/people [ivan]))
@@ -80,7 +101,7 @@
     (t/testing "multi field"
       (t/is (= :ivan (:crux.db/id (first (select {:name "Ivan" :surname "Ivanof"}))))))))
 
-(t/deftest test-operator
+#_(t/deftest test-operator
   ;; https://docs.couchdb.org/en/stable/api/database/find.html#implicit-operators
   (fix/transact! *api* (fix/people [{:crux.db/id :ivan :age 10}]))
 
@@ -104,7 +125,7 @@
   #_(t/is (thrown-with-msg? clojure.lang.ExceptionInfo #"Spec assertion failed"
                           (select {:age {:$unknown 11}}))))
 
-(t/deftest test-not
+#_(t/deftest test-not
   (fix/transact! *api* (fix/people [{:crux.db/id :ivan :name "Ivan"}
                                     {:crux.db/id :fred :name "Fred"}
                                     {:crux.db/id :jim :name "Jim"}]))

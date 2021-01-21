@@ -1,69 +1,72 @@
 (ns crux.select-test
-  (:require [clojure.spec.alpha :as s]
-            [clojure.test :as t]
+  (:require [clojure.test :as t]
+            [clojure.walk :refer [postwalk]]
             [crux.api :as api]
             [crux.fixtures :as fix :refer [*api*]]))
 
 (t/use-fixtures :each fix/with-node)
 
-(def operands {:$eq '=
-               :$gt '>
-               :$gte '>=
-               :$lt '<
-               :$lte '<=})
+(def operators {:$eq '=
+                :$gt '>
+                :$gte '>=
+                :$lt '<
+                :$lte '<=})
 
-;; ;; so nice to get the spec working
-;; (s/def ::nested #{:$not})
-;; (s/def ::operator (set (keys operands)))
-;; (s/def ::val (s/map-of ::operator any?))
-;; (s/def ::query (s/map-of keyword ::val))
+(def conditions #{:$and :$not})
 
-;; interesting. Or is going to be quite hard
-;; {
-;;     "year": 1977,
-;;     "$or": [
-;;         { "director": "George Lucas" },
-;;         { "director": "Steven Spielberg" }
-;;     ]
-;; }
+(def field? (complement operators))
 
-;; Not
-;; {
-;;     "year": {
-;;         "$gte": 1900
-;;     },
-;;     "year": {
-;;         "$lte": 1903
-;;     },
-;;     "$not": {
-;;         "year": 1901
-;;     }
-;; }
-
-
-;;
-(defn- ->where [selector]
-  (reduce into []
+(defn ->ast [selector]
+  (reduce into [:condition :$and]
           (for [[k v] selector]
-            (do
-              (println "h" (= :$not k) k v)
-              (case k
-                :$not
-                [(apply list 'not
-                        (mapcat ->where v))]
-                (let [[op v] (if (coll? v) (first v) [:$eq v])
-                      a (gensym (name k))]
-                  [['e k a]
-                   [(list (operands op) a v)]]))))))
+            (if (conditions k)
+              [[:condition k (vec (mapcat ->ast (if (vector? v) v [v])))]]
+              (if (field? k)
+                (for [[op operand] (if (map? v) v {:$eq v})]
+                  [:field k op operand])
+                k)))))
 
-(defn- select->datalog [q]
-  {:find ['e]
-   :where (->where q)})
+(defn- collect-fields [ast]
+  (let [fields (atom #{})]
+    (postwalk (fn [x]
+                (when (and (vector? x) (= :field (first x)))
+                  (swap! fields conj (second x)))
+                x)
+              ast)
+    @fields))
+
+(comment
+  (collect-fields (->ast {:age {:$gt 9}}))
+  (->ast {:$not {:age {:$gt 9}}}))
+
+(defn- ->where [field->vars node]
+  (case (first node)
+    :field
+    (let [[_ field op literal] node]
+      [(list (operators op) (field->vars field) literal)])
+
+    :condition
+    (case (second node)
+      :$and
+      (mapv (partial ->where field->vars) (drop 2 node))
+      :$not
+      (apply list 'not (mapcat (partial ->where field->vars) (drop 2 node))))))
+
+(defn ->datalog [selector]
+  (let [ast (->ast selector)
+        field->vars (into {} (map vector (collect-fields ast) (repeatedly gensym)))]
+    {:find ['e]
+     :where (into (vec (for [[field var] field->vars]
+                         ['e field var]))
+                  (->where field->vars ast))}))
+
+(comment
+  (->datalog {:name "Ivan"})
+  (->datalog {:age {:$gt 9}}))
 
 (defn- select [q]
   (let [db (api/db *api*)]
-    (map (partial api/entity db) (map first (api/q db (doto
-                                                          (select->datalog q) prn))))))
+    (map (partial api/entity db) (map first (api/q db (doto (->datalog q) prn))))))
 
 (t/deftest test-select
   ;; https://docs.couchdb.org/en/stable/api/database/find.html
@@ -121,6 +124,7 @@
 
   (t/is (= #{:ivan :fred} (set (map :crux.db/id (select {:$or [{:name "Ivan"} {:name "Fred"}]}))))))
 
+;; todo re-add spec to AST to check for operators etc, or throw human meaninful msgs
 ;; todo in
 ;; todo elemMatch
 ;; todo fields?

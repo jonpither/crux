@@ -34,3 +34,9 @@
   (let [docs (select {:manager true, :user_id 7})]
     (t/is (= 1 (count docs)))
     (t/is (= 7 (:user_id (first docs))))))
+
+(t/deftest test-multi-cond-find
+  (let [docs (select {:$and [{:age {:$gte 75}}]
+                      :$or [{:firstName "Mathis" :fistName "Whitley"}]})]
+    (t/is (= 2 (count docs)))
+    (t/is (= #{11 13} (set (map :user_id docs))))))

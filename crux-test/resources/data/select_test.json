@@ -187,6 +187,8 @@
         "crux.db/id": "b06aadcf-cd0f-4ca6-9f7e-2c993e48d4c4",
         "user_id": 11,
         "name": {"first": "Mathis", "last": "Hernandez"},
+        "firstName": "Mathis",
+        "lastName": "Hernandez",
         "age": 75,
         "location": {
             "state": "Hawaii",
@@ -221,6 +223,8 @@
         "crux.db/id": "b1e70402-8add-4068-af8f-b4f3d0feb049",
         "user_id": 13,
         "name": {"first": "Whitley", "last": "Harvey"},
+        "firstName": "Whitley",
+        "lastName": "Harvey",
         "age": 78,
         "location": {
             "state": "Minnesota",

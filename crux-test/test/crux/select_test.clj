@@ -48,7 +48,7 @@
                                     {:crux.db/id :fred :name "Fred"}
                                     {:crux.db/id :jim :name "Jim" :surname "Bob"}]))
 
-  (t/is (= #{:jim} (set (map :crux.db/id (select {:$and [{:name "Ivan" :surname "Bob"}]}))))))
+  (t/is (= #{:jim} (set (map :crux.db/id (select {:$and [{:name "Jim"} {:surname "Bob"}]}))))))
 
 (t/deftest test-not
   (fix/transact! *api* (fix/people [{:crux.db/id :ivan :name "Ivan"}
@@ -57,11 +57,7 @@
 
   (t/is (= #{:fred :jim} (set (map :crux.db/id (select {:$not [{:name "Ivan"}]}))))))
 
-#_(t/deftest test-or
-  ;; "$or": [
-  ;;         { "director": "George Lucas" },
-  ;;         { "director": "Steven Spielberg" }
-  ;;         ]
+(t/deftest test-or
   (fix/transact! *api* (fix/people [{:crux.db/id :ivan :name "Ivan"}
                                     {:crux.db/id :fred :name "Fred"}
                                     {:crux.db/id :jim :name "Jim"}]))

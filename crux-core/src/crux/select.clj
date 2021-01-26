@@ -31,14 +31,16 @@
               ast)
     @fields))
 
+(defn- root? [ast]
+  (and (vector? ast) (and (= :root (first ast)))))
+
 (defn- and? [ast]
-  (and (vector? ast)
-       (and (= :condition (first ast)) (= :$and (second ast)))))
+  (and (vector? ast) (and (= :condition (first ast)) (= :$and (second ast)))))
 
 (defn- unpack-nested-ands [ast]
-  (clojure.walk/prewalk
+  (clojure.walk/postwalk
    (fn [x]
-     (if (and? x)
+     (if (or (root? x) (and? x))
        (conj (vec (drop-last x))
              (reduce into []
                      (for [x (last x)]
@@ -49,36 +51,33 @@
    ast))
 
 (defn- ->where [field->vars node]
-  (if (vector? (first node))
-    ;; Implicit and:
-    (map (partial ->where field->vars) node)
+  (case (first node)
+    :root
+    (map (partial ->where field->vars) (last node))
 
-    (case (first node)
-      :field
-      (let [[_ field op literal] node]
-        [(list (operators op) (field->vars field) literal)])
+    :field
+    (let [[_ field op literal] node]
+      [(list (operators op) (field->vars field) literal)])
 
-      :condition
-      (let [[_ condition args] node]
-        (case condition
-          :$and
-          (apply list 'and (map (partial ->where field->vars) args))
-          :$not
-          (apply list 'not (map (partial ->where field->vars) args))
-          :$or
-          (apply list 'or (map (partial ->where field->vars) args)))))))
+    :condition
+    (let [[_ condition args] node]
+      (case condition
+        :$and
+        (apply list 'and (map (partial ->where field->vars) args))
+        :$not
+        (apply list 'not (map (partial ->where field->vars) args))
+        :$or
+        (apply list 'or (map (partial ->where field->vars) args))))))
 
 (defn ->datalog [{:keys [selector limit]}]
-  (let [ast (unpack-nested-ands (->ast selector))
+  (let [ast (unpack-nested-ands [:root (->ast selector)])
         field->vars (into {} (map vector (collect-fields ast) (repeatedly gensym)))]
     (merge
      {:find ['e]
       :where (into (vec (for [[field var] field->vars]
                           ['e field var]))
                    ;; Unpack top level 'and
-                   (reduce into []
-                           (for [clause (->where field->vars ast)]
-                             (if (= 'and (first clause)) (rest clause) [clause]))))}
+                   (->where field->vars ast))}
      (when limit {:limit limit}))))
 
 (defn select [db q]

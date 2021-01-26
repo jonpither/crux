@@ -6,8 +6,8 @@
             [crux.fixtures :as fix :refer [*api*]]
             crux.select))
 
-(defn select [q]
-  (crux.select/select (api/db *api*) q))
+(defn select [q & [{:as opts}]]
+  (crux.select/select (api/db *api*) (merge opts {:selector q})))
 
 (defn- with-test-data [f]
   (let [{:keys [docs]} (json/parse-string (slurp (io/resource "data/select_test.json")) keyword)]
@@ -40,3 +40,11 @@
                       :$or [{:firstName "Mathis"} {:firstName "Whitley"}]})]
     (t/is (= 2 (count docs)))
     (t/is (= #{11 13} (set (map :user_id docs))))))
+
+(t/deftest test-limit
+  (let [docs (select {:age {:$gt 0}})]
+    (t/is (= 15 (count docs)))
+    (doseq [n [0 1 5 14]]
+      (t/is (= n (count (select {:age {:$gt 0}} {:limit n})))))))
+
+;; how to add limit?

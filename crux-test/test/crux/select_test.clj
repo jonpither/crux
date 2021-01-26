@@ -4,8 +4,8 @@
             [crux.fixtures :as fix :refer [*api*]]
             crux.select))
 
-(defn select [q]
-  (crux.select/select (api/db *api*) q))
+(defn select [q & [{:as opts}]]
+  (crux.select/select (api/db *api*) (merge opts {:selector q})))
 
 (t/use-fixtures :each fix/with-node)
 

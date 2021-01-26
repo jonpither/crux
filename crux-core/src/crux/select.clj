@@ -51,28 +51,31 @@
           :$or
           (apply list 'or (map (partial ->where field->vars) args)))))))
 
-(defn ->datalog [ast]
-  (let [field->vars (into {} (map vector (collect-fields ast) (repeatedly gensym)))]
-    {:find ['e]
-     :where (into (vec (for [[field var] field->vars]
-                         ['e field var]))
-                  ;; Unpack top level 'and
-                  (reduce into []
-                          (for [clause (->where field->vars ast)]
-                            (if (= 'and (first clause)) (rest clause) [clause]))))}))
+(defn ->datalog [{:keys [selector limit]}]
+  (let [ast (->ast selector)
+        field->vars (into {} (map vector (collect-fields ast) (repeatedly gensym)))]
+    (merge
+     {:find ['e]
+      :where (into (vec (for [[field var] field->vars]
+                          ['e field var]))
+                   ;; Unpack top level 'and
+                   (reduce into []
+                           (for [clause (->where field->vars ast)]
+                             (if (= 'and (first clause)) (rest clause) [clause]))))}
+     (when limit {:limit limit}))))
 
 (defn select [db q]
-  (map (partial api/entity db) (map first (api/q db (doto (->datalog (->ast q)) prn)))))
+  (map (partial api/entity db) (map first (api/q db (doto (->datalog q) prn)))))
 
 (comment
   (collect-fields (->ast {:age {:$gt 9}}))
   (->ast {:$not {:age {:$gt 9}}})
   (->ast {:name "Ivan"})
 
-  (->datalog (->ast {:name "Ivan"}))
-  (->datalog (->ast {:$not {:name "Ivan"}}))
-  (->datalog (->ast {:age {:$gt 9}}))
-  (->datalog (->ast {:manager true, :user_id 7}))
+  (->datalog {:name "Ivan"})
+  (->datalog {:$not {:name "Ivan"}})
+  (->datalog {:age {:$gt 9}})
+  (->datalog {:manager true, :user_id 7})
 
   (->ast {:$and [{:age {:$gte 75}}]
           :$or [{:firstName "Mathis"} {:firstName "Whitley"}]})
@@ -81,10 +84,10 @@
    [:condition :$or [[[:field :firstName :$eq "Mathis"]]
                      [[:field :firstName :$eq "Whitley"]]]]]
 
-  (->datalog (->ast {:$and [{:age {:$gte 75}}]
-                     :$or [{:firstName "Mathis"} {:firstName "Whitley"}]}))
+  (->datalog {:$and [{:age {:$gte 75}}]
+              :$or [{:firstName "Mathis"} {:firstName "Whitley"}]})
 
-  (->datalog (->ast {:$and [{:name "Ivan" :surname "Bob"}]}))
+  (->datalog {:$and [{:name "Ivan" :surname "Bob"}]})
 
   {:find [e], :where [[e :name G__95625]
                       [e :surname G__95626]

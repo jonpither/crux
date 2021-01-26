@@ -31,6 +31,23 @@
               ast)
     @fields))
 
+(defn- and? [ast]
+  (and (vector? ast)
+       (and (= :condition (first ast)) (= :$and (second ast)))))
+
+(defn- unpack-nested-ands [ast]
+  (clojure.walk/prewalk
+   (fn [x]
+     (if (and? x)
+       (conj (vec (drop-last x))
+             (reduce into []
+                     (for [x (last x)]
+                       (if (and? x)
+                         (last x)
+                         [x]))))
+       x))
+   ast))
+
 (defn- ->where [field->vars node]
   (if (vector? (first node))
     ;; Implicit and:
@@ -52,7 +69,7 @@
           (apply list 'or (map (partial ->where field->vars) args)))))))
 
 (defn ->datalog [{:keys [selector limit]}]
-  (let [ast (->ast selector)
+  (let [ast (unpack-nested-ands (->ast selector))
         field->vars (into {} (map vector (collect-fields ast) (repeatedly gensym)))]
     (merge
      {:find ['e]

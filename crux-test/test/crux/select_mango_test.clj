@@ -46,5 +46,3 @@
     (t/is (= 15 (count docs)))
     (doseq [n [0 1 5 14]]
       (t/is (= n (count (select {:age {:$gt 0}} {:limit n})))))))
-
-;; how to add limit?

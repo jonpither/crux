@@ -64,8 +64,18 @@
 
   (t/is (= #{:ivan :fred} (set (map :crux.db/id (select {:$or [{:name "Ivan"} {:name "Fred"}]}))))))
 
+(t/deftest test-nested
+  (fix/transact! *api* (fix/people [{:crux.db/id :jons :firstName "Jon" :lastName "Duggen" :age 10}
+                                    {:crux.db/id :jons2 :firstName "Jon" :lastName "Flow" :age 11}
+                                    {:crux.db/id :jonb :firstName "Jon" :lastName "Smith" :age 10}]))
+  (t/is (= #{:jons} (set (map :crux.db/id (select {:$and [{:age {:$lte 10}}
+                                                          {:$and [{:firstName "Jon"}
+                                                                  {:$not {:lastName "Smith"}}]}]}))))))
+
+
 ;; todo re-add spec to AST to check for operators etc, or throw human meaninful msgs
 ;; todo in
 ;; todo elemMatch
 ;; todo fields?
 ;; todo, does Couch have a test suite we can use?
+;; todo, figure out testing for 'bad' stuff, like the mango tests do

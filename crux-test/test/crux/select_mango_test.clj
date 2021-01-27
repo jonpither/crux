@@ -52,3 +52,8 @@
     (assert (= 15 (count docs)))
     (doseq [n [0 1 5 14]]
       (t/is (= (- 15 n) (count (select {:age {:$gt 0}} {:offset n})))))))
+
+(t/deftest test-sort
+  (let [docs (select {:age {:$gt 0}})]
+    (t/is (= (sort-by :age docs) (select {:age {:$gt 0}} {:order-by [{:age :asc}]})))
+    (t/is (= (reverse (sort-by :age docs)) (select {:age {:$gt 0}} {:order-by [{:age :desc}]})))))

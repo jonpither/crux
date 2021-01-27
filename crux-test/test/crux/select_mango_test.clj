@@ -74,6 +74,11 @@
     (t/is (= (sort (map :age docs))
              (map :age docs)))))
 
+(t/deftest test-fields
+  (let [docs (select {:age {:$gt 0}} {:fields [:user_id]})]
+    (assert (= 15 (count docs)))
+    (t/is (= #{:user_id} (set (mapcat keys docs))))))
+
 (t/deftest test-empty
   (t/is (= 15 (count (select {})))))
 

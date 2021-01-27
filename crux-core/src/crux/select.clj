@@ -101,8 +101,12 @@
                                        [(field->vars k) direction])
                                      (apply merge order-by))}))))
 
-(defn select [db q]
-  (map (partial api/entity db) (map first (api/q db (doto (->datalog q) prn)))))
+(defn select [db {:keys [fields] :as q}]
+  (->> (doto (->datalog q) prn)
+       (api/q db)
+       (map first)
+       (map (partial api/entity db))
+       (map #(if fields (select-keys % fields) %))))
 
 (comment
   (collect-fields (->ast {:age {:$gt 9}}))

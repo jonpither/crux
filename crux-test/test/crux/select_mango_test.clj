@@ -68,3 +68,19 @@
            (map :company (select {:company {:$lt "M"}
                                   :$or [{:company "Dreamia"} {:manager true}]}
                                  {:order-by [{:company :asc} {:manager :desc}]})))))
+
+(t/deftest test-sort-exists-true
+  (let [docs (select {:age {:$gt 0 :$exists true}} {:order-by [{:age :asc}]})]
+    (t/is (= (sort (map :age docs))
+             (map :age docs)))))
+
+;; 06-basic-text-tests -------------------------
+
+(t/deftest test-exists-field
+  (let [docs (select {:exists_field {:$exists true}})]
+    (t/is (= 2 (count docs)))
+    (t/is (= #{7 8} (set (map :user_id docs)))))
+
+  (let [docs (select {:exists_field {:$exists false}})]
+    (t/is (= 13 (count docs)))
+    (t/is (empty? (filter #{7 8} (map :user_id docs))))))

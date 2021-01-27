@@ -25,8 +25,11 @@
 (defn- collect-fields [ast]
   (let [fields (atom #{})]
     (postwalk (fn [x]
-                (when (and (vector? x) (= :field (first x)))
-                  (swap! fields conj (second x)))
+                (when (vector? x)
+                  (let [[t f o v] x]
+                    (when (and (= :field t)
+                               (not (and (= :$exists o) (false? v))))
+                      (swap! fields conj f))))
                 x)
               ast)
     @fields))
@@ -64,17 +67,21 @@
 
     :field
     (let [[_ field op literal] node]
-      [(list (operators op) (field->vars field) literal)])
+      (if (= :$exists op)
+        (when (not literal)
+          (list 'not ['e field]))
+        [(list (operators op) (field->vars field) literal)]))
 
     :condition
     (let [[_ condition args] node]
-      (case condition
-        :$and
-        (apply list 'and (map (partial ->where field->vars) args))
-        :$not
-        (apply list 'not (map (partial ->where field->vars) args))
-        :$or
-        (apply list 'or (ground-vars (map (partial ->where field->vars) args)))))))
+      (when-let [sub-clauses (map (partial ->where field->vars) args)]
+        (case condition
+          :$and
+          (apply list 'and sub-clauses)
+          :$not
+          (apply list 'not sub-clauses)
+          :$or
+          (apply list 'or (ground-vars sub-clauses)))))))
 
 (defn ->datalog [{:keys [selector limit offset order-by]}]
   (let [ast (unpack-nested-ands [:root (->ast selector)])
@@ -83,9 +90,11 @@
      {:find (into ['e] (mapv (fn [[k]]
                                (field->vars k))
                              (apply merge order-by)))
-      :where (into (vec (for [[field var] field->vars]
-                          ['e field var]))
-                   (->where field->vars ast))}
+      :where (into []
+                   (concat [['e :crux.db/id]]
+                           (for [[field var] field->vars]
+                             ['e field var])
+                           (remove nil? (->where field->vars ast))))}
      (when limit {:limit limit})
      (when offset {:offset offset})
      (when order-by {:order-by (mapv (fn [[k direction]]

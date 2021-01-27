@@ -57,3 +57,21 @@
   (let [docs (select {:age {:$gt 0}})]
     (t/is (= (sort-by :age docs) (select {:age {:$gt 0}} {:order-by [{:age :asc}]})))
     (t/is (= (reverse (sort-by :age docs)) (select {:age {:$gt 0}} {:order-by [{:age :desc}]})))))
+
+(t/deftest test-sort-desc-complex
+  (t/is (map :company (select {:company {:$lt "M"}
+                               :$or [{:company "Dreamia"} {:manager true}]}
+                              {:sort [{:company :desc} {:manager :desc}]}))))
+
+  ;; def) test_sort_desc_complex(self):
+  ;;       docs = self.db.find(
+  ;;           {
+  ;;               "company": {"$lt": "M"},
+  ;;               "$or": [{"company": "Dreamia"}, {"manager": True}],
+  ;;           },
+  ;;           sort=[{"company": "desc"}, {"manager": "desc"}],
+  ;;       )
+
+  ;;       companies_returned = list(d["company"] for d in docs)
+  ;;       desc_companies = sorted(companies_returned, reverse=True)
+  ;;       self.assertEqual(desc_companies, companies_returned)

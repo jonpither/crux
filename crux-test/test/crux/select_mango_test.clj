@@ -74,6 +74,10 @@
     (t/is (= (sort (map :age docs))
              (map :age docs)))))
 
+(t/deftest test-empty
+  (t/is (= 15 (count (select {})))))
+
+
 ;; 06-basic-text-tests -------------------------
 
 (t/deftest test-exists-field

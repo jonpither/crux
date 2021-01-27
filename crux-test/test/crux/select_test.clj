@@ -2,10 +2,8 @@
   (:require [clojure.test :as t]
             [crux.api :as api]
             [crux.fixtures :as fix :refer [*api*]]
+            [crux.fixtures.select :refer [select ex-data-thrown?]]
             crux.select))
-
-(defn select [q & [{:as opts}]]
-  (crux.select/select (api/db *api*) (merge opts {:selector q})))
 
 (t/use-fixtures :each fix/with-node)
 
@@ -72,12 +70,15 @@
                                                           {:$and [{:firstName "Jon"}
                                                                   {:$not {:lastName "Smith"}}]}]}))))))
 
+(t/deftest test-bad-operator
+  (ex-data-thrown?
+   {:error :invalid-operator, :operator :$notAnd}
+   (select {:name {:$notAnd 10}})))
+
 (t/deftest test-bad-selector
-  (try
-    (select {:name {:$notAnd 10}})
-    (t/is false)
-    (catch clojure.lang.ExceptionInfo e
-      (t/is (= {:error :invalid-operator, :operator :$notAnd} (.getData e))))))
+  (ex-data-thrown?
+   {:operator :$lte, :error :invalid-selector}
+   (select {:$lte 10})))
 
 
 ;; todo re-add spec to AST to check for operators etc, or throw human meaninful msgs

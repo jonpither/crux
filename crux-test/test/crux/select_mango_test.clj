@@ -4,10 +4,8 @@
             [clojure.test :as t]
             [crux.api :as api]
             [crux.fixtures :as fix :refer [*api*]]
+            [crux.fixtures.select :refer [select]]
             crux.select))
-
-(defn select [q & [{:as opts}]]
-  (crux.select/select (api/db *api*) (merge opts {:selector q})))
 
 (defn- with-test-data [f]
   (let [{:keys [docs]} (json/parse-string (slurp (io/resource "data/select_test.json")) keyword)]

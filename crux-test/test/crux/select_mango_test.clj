@@ -43,6 +43,12 @@
 
 (t/deftest test-limit
   (let [docs (select {:age {:$gt 0}})]
-    (t/is (= 15 (count docs)))
+    (assert (= 15 (count docs)))
     (doseq [n [0 1 5 14]]
       (t/is (= n (count (select {:age {:$gt 0}} {:limit n})))))))
+
+(t/deftest test-offset
+  (let [docs (select {:age {:$gt 0}})]
+    (assert (= 15 (count docs)))
+    (doseq [n [0 1 5 14]]
+      (t/is (= (- 15 n) (count (select {:age {:$gt 0}} {:offset n})))))))

@@ -69,7 +69,7 @@
         :$or
         (apply list 'or (map (partial ->where field->vars) args))))))
 
-(defn ->datalog [{:keys [selector limit]}]
+(defn ->datalog [{:keys [selector limit offset]}]
   (let [ast (unpack-nested-ands [:root (->ast selector)])
         field->vars (into {} (map vector (collect-fields ast) (repeatedly gensym)))]
     (merge
@@ -78,7 +78,8 @@
                           ['e field var]))
                    ;; Unpack top level 'and
                    (->where field->vars ast))}
-     (when limit {:limit limit}))))
+     (when limit {:limit limit})
+     (when offset {:offset offset}))))
 
 (defn select [db q]
   (map (partial api/entity db) (map first (api/q db (doto (->datalog q) prn)))))

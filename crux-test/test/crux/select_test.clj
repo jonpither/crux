@@ -72,6 +72,13 @@
                                                           {:$and [{:firstName "Jon"}
                                                                   {:$not {:lastName "Smith"}}]}]}))))))
 
+(t/deftest test-bad-selector
+  (try
+    (select {:name {:$notAnd 10}})
+    (t/is false)
+    (catch clojure.lang.ExceptionInfo e
+      (t/is (= {:error :invalid-operator, :operator :$notAnd} (.getData e))))))
+
 
 ;; todo re-add spec to AST to check for operators etc, or throw human meaninful msgs
 ;; todo in

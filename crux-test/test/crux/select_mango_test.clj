@@ -20,14 +20,7 @@
 
 (t/deftest test-simple-find
   (let [docs (select {:age {:$lt 35}})]
-
     (t/is (= 3 (count docs)))
-
-    ;; TODO, they do ordering
-    ;; assert docs[0]["user_id"] == 9
-    ;; assert docs[1]["user_id"] == 1
-    ;; assert docs[2]["user_id"] == 7
-
     (t/is (= #{9 1 7} (set (map :user_id docs))))))
 
 (t/deftest test-multi-cond-find

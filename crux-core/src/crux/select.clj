@@ -2,15 +2,12 @@
   (:require [clojure.walk :refer [postwalk]]
             [crux.api :as api]))
 
-(def operators {:$eq '=
-                :$gt '>
-                :$gte '>=
-                :$lt '<
-                :$lte '<=})
+(def operators #{:$eq :$gt :$gte :$lt :$lte :$exists})
 
 (def conditions #{:$and :$not :$or})
 
-(def field? (complement operators))
+(defn- operator? [k] (.startsWith (name k) "$"))
+(def field? (complement operator?))
 
 (defn ->ast [selector]
   (into []
@@ -19,6 +16,8 @@
             [:condition k (vec (mapcat ->ast (if (vector? v) v [v])))]
             (if (field? k)
               (let [[op operand] (first (if (map? v) v {:$eq v}))]
+                (when-not (operators op)
+                  (throw (ex-info "Invalid Query" {:error :invalid-operator :operator op})))
                 [:field k op operand])
               k)))))
 
@@ -60,6 +59,12 @@
      (for [clause or-statement]
        (apply list 'and clause  (map #(vector (list 'identity %)) vars))))))
 
+(def operators->datalog {:$eq '=
+                         :$gt '>
+                         :$gte '>=
+                         :$lt '<
+                         :$lte '<=})
+
 (defn- ->where [field->vars node]
   (case (first node)
     :root
@@ -70,7 +75,7 @@
       (if (= :$exists op)
         (when (not literal)
           (list 'not ['e field]))
-        [(list (operators op) (field->vars field) literal)]))
+        [(list (operators->datalog op) (field->vars field) literal)]))
 
     :condition
     (let [[_ condition args] node]

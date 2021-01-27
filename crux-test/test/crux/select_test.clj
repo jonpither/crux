@@ -36,10 +36,7 @@
     (t/is (= :ivan (:crux.db/id (first (select {:age {:$lte 11}})))))
     (t/is (= :ivan (:crux.db/id (first (select {:age {:$lte 10}})))))
     (t/is (= :ivan (:crux.db/id (first (select {:age {:$gte 9}})))))
-    (t/is (= :ivan (:crux.db/id (first (select {:age {:$gte 10}}))))))
-
-  #_(t/is (thrown-with-msg? clojure.lang.ExceptionInfo #"Spec assertion failed"
-                            (select {:age {:$unknown 11}}))))
+    (t/is (= :ivan (:crux.db/id (first (select {:age {:$gte 10}})))))))
 
 (t/deftest test-and
   (fix/transact! *api* (fix/people [{:crux.db/id :ivan :name "Ivan"}
@@ -87,3 +84,13 @@
 ;; todo fields?
 ;; todo, does Couch have a test suite we can use?
 ;; todo, figure out testing for 'bad' stuff, like the mango tests do
+;; mysecretpassword
+
+;; spec options:
+;; 1 not spec, we put asserts in the code
+;; 2 spec the AST
+;; 3 small transformation on the selector, to make speccable
+;;  $not : blag -> [$not :blag] jdt - slack
+;;  {$not foo :age 10} -> [{$not foo} {:age 10}]
+
+;; todo - barf if an operator in the field position

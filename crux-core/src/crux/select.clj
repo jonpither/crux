@@ -50,6 +50,13 @@
        x))
    ast))
 
+;; Taken from calcite.clj
+(defn- ground-vars [or-statement]
+  (let [vars (distinct (mapcat #(filter symbol? (rest (first %))) or-statement))]
+    (vec
+     (for [clause or-statement]
+       (apply list 'and clause  (map #(vector (list 'identity %)) vars))))))
+
 (defn- ->where [field->vars node]
   (case (first node)
     :root
@@ -67,7 +74,7 @@
         :$not
         (apply list 'not (map (partial ->where field->vars) args))
         :$or
-        (apply list 'or (map (partial ->where field->vars) args))))))
+        (apply list 'or (ground-vars (map (partial ->where field->vars) args)))))))
 
 (defn ->datalog [{:keys [selector limit offset order-by]}]
   (let [ast (unpack-nested-ands [:root (->ast selector)])

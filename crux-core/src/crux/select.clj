@@ -14,12 +14,10 @@
         (for [[k v] selector]
           (if (conditions k)
             [:condition k (vec (mapcat ->ast (if (vector? v) v [v])))]
-            (if (field? k)
-              (let [[op operand] (first (if (map? v) v {:$eq v}))]
-                (when-not (operators op)
-                  (throw (ex-info "Invalid Query" {:error :invalid-operator :operator op})))
-                [:field k op operand])
-              k)))))
+            (let [[op operand] (first (if (map? v) v {:$eq v}))]
+              (when-not (operators op)
+                (throw (ex-info "Invalid Query" {:error :invalid-operator :operator op})))
+              [:field k op operand])))))
 
 (defn- collect-fields [ast]
   (let [fields (atom #{})]

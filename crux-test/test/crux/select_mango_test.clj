@@ -16,6 +16,8 @@
 
 ;; Ported from Couch:
 
+;; 02-basic-find-tests -------------------------
+
 (t/deftest test-simple-find
   (let [docs (select {:age {:$lt 35}})]
     (t/is (= 3 (count docs)))
@@ -73,6 +75,8 @@
 (t/deftest test-empty
   (t/is (= 15 (count (select {})))))
 
+(t/deftest test-unsatisfiable-range
+  (t/is (= 0 (count (select {:$and [{:age {:$gt 0}} {:age {:$lt 0}}]})))))
 
 ;; 06-basic-text-tests -------------------------
 
@@ -84,3 +88,8 @@
   (let [docs (select {:exists_field {:$exists false}})]
     (t/is (= 13 (count docs)))
     (t/is (empty? (filter #{7 8} (map :user_id docs))))))
+
+(t/deftest test-nor
+  (let [docs (select {:$nor [{:age 22} {:age 33}]})]
+    (t/is (= 13 (count docs)))
+    (t/is (= #{0 1 4 13 6 3 12 2 11 5 14 10 8} (set (map :user_id docs))))))

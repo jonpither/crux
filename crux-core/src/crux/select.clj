@@ -4,7 +4,7 @@
 
 (def operators #{:$eq :$gt :$gte :$lt :$lte :$exists})
 
-(def conditions #{:$and :$not :$or})
+(def conditions #{:$and :$not :$or :$nor})
 
 (defn- operator? [k] (.startsWith (name k) "$"))
 (def field? (complement operator?))
@@ -86,7 +86,9 @@
           :$not
           (apply list 'not sub-clauses)
           :$or
-          (apply list 'or (ground-vars sub-clauses)))))))
+          (apply list 'or (ground-vars sub-clauses))
+          :$nor
+          (list 'not (apply list 'or (ground-vars sub-clauses))))))))
 
 (defn ->datalog [{:keys [selector limit offset order-by]}]
   (let [ast (unpack-nested-ands [:root (->ast selector)])

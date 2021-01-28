@@ -12,6 +12,7 @@
             [crux.http-server.entity :as entity]
             [crux.http-server.json :as http-json]
             [crux.http-server.query :as query]
+            [crux.http-server.find :as find]
             [crux.http-server.status :as status]
             [crux.http-server.util :as util]
             [crux.io :as cio]
@@ -344,6 +345,12 @@
                                  :get (entity/entity-state opts)
                                  :parameters {:query ::entity/query-params}}
                                 (with-example "entity-response"))]
+                 ["/find" {:muuntaja find/->find-muuntaja
+                           :summary "Find"
+                           :description "Perform a find"
+                           :post {:handler (find/find-handler opts)
+                                  :parameters {:body ::find/body-params
+                                               :query ::find/query-params}}}]
                  ["/query" (-> query-handler
                                (with-example "query-response"))]
                  ["/query.csv" (assoc query-handler :middleware [[add-response-format "text/csv"]] :no-doc true)]

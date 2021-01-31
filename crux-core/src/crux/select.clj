@@ -2,42 +2,37 @@
   (:require [clojure.walk :refer [postwalk]]
             [crux.api :as api]))
 
-(def operators #{:$eq :$gt :$gte :$lt :$lte :$exists})
-
+(def operators #{:$eq :$gt :$gte :$lt :$lte :$exists :$in})
 (def conditions #{:$and :$not :$or :$nor})
 
 (defn- operator? [k] (.startsWith (name k) "$"))
 (def field? (complement operator?))
-
-(defn ->ast [selector]
-  (into []
-        (for [[k v] selector]
-          (if (conditions k)
-            [:condition k (vec (mapcat ->ast (if (vector? v) v [v])))]
-            (if (field? k)
-              (let [[op operand] (first (if (map? v) v {:$eq v}))]
-                (when-not (operators op)
-                  (throw (ex-info "Invalid Query" {:error :invalid-operator :operator op})))
-                [:field k op operand])
-              (throw (ex-info "Invalid Query" {:error :invalid-selector :operator k})))))))
-
-(defn- collect-fields [ast]
-  (let [fields (atom #{})]
-    (postwalk (fn [x]
-                (when (vector? x)
-                  (let [[t f o v] x]
-                    (when (and (= :field t)
-                               (not (and (= :$exists o) (false? v))))
-                      (swap! fields conj f))))
-                x)
-              ast)
-    @fields))
 
 (defn- root? [ast]
   (and (vector? ast) (and (= :root (first ast)))))
 
 (defn- and? [ast]
   (and (vector? ast) (and (= :condition (first ast)) (= :$and (second ast)))))
+
+(defn ->ast [selector]
+  (->> (letfn [(stepfn [selector]
+                 (into []
+                       (for [[k v] selector]
+                         (if (conditions k)
+                           [:condition k (vec (mapcat stepfn (if (vector? v) v [v])))]
+                           (if (field? k)
+                             (let [[op operand] (first (if (map? v) v {:$eq v}))]
+                               (when-not (operators op)
+                                 (throw (ex-info "Invalid Query" {:error :invalid-operator :operator op})))
+                               [:field k op operand])
+                             (throw (ex-info "Invalid Query" {:error :invalid-selector :operator k})))))))]
+         (stepfn selector))
+       (vector :root)
+       (postwalk (fn [x]
+                   (if (or (root? x) (and? x))
+                     (conj (vec (drop-last x))
+                           (reduce into [] (for [x (last x)] (if (and? x) (last x) [x]))))
+                     x)))))
 
 (def operators->datalog {:$eq '=
                          :$gt '>
@@ -78,16 +73,7 @@
           (list 'not (apply list 'or (ground-vars sub-clauses))))))))
 
 (defn ->datalog [{:keys [selector limit offset order-by lookup]}]
-  (let [ast (->> [:root (->ast selector)]
-
-                 ;; Unpack nested ands
-                 (clojure.walk/postwalk
-                  (fn [x]
-                    (if (or (root? x) (and? x))
-                      (conj (vec (drop-last x))
-                            (reduce into [] (for [x (last x)] (if (and? x) (last x) [x]))))
-                      x))))
-
+  (let [ast (->ast selector)
         field->vars (let [fields (atom #{})]
                       (postwalk (fn [x]
                                   (when (vector? x)

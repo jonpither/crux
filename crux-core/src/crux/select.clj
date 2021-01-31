@@ -90,30 +90,48 @@
           :$nor
           (list 'not (apply list 'or (ground-vars sub-clauses))))))))
 
-(defn ->datalog [{:keys [selector limit offset order-by]}]
+(defn ->datalog [{:keys [selector limit offset order-by lookup]}]
   (let [ast (unpack-nested-ands [:root (->ast selector)])
         field->vars (into {} (map vector (collect-fields ast) (repeatedly gensym)))]
-    (merge
-     {:find (into ['e] (mapv (fn [[k]]
-                               (field->vars k))
-                             (apply merge order-by)))
-      :where (into []
-                   (concat [['e :crux.db/id]]
-                           (for [[field var] field->vars]
-                             ['e field var])
-                           (remove nil? (->where field->vars ast))))}
-     (when limit {:limit limit})
-     (when offset {:offset offset})
-     (when order-by {:order-by (mapv (fn [[k direction]]
-                                       [(field->vars k) direction])
-                                     (apply merge order-by))}))))
 
-(defn select [db {:keys [fields] :as q}]
-  (->> (doto (->datalog q) prn)
-       (api/q db)
-       (map first)
-       (map (partial api/entity db))
-       (map #(if fields (select-keys % fields) %))))
+    (cond-> {:find (into ['e] (mapv (fn [[k]]
+                                      (field->vars k))
+                                    (apply merge order-by)))
+             :where (into []
+                          (concat [['e :crux.db/id]]
+                                  (for [[field var] field->vars]
+                                    ['e field var])
+                                  (remove nil? (->where field->vars ast))))}
+
+      limit
+      (assoc :limit limit)
+
+      offset
+      (assoc :offset offset)
+
+      order-by
+      (assoc :order-by (mapv (fn [[k direction]]
+                               [(field->vars k) direction])
+                             (apply merge order-by)))
+
+      lookup
+      (as-> q1
+          (let [m (into {'e 'e2}
+                        (for [[k v] (:let lookup)]
+                          [(keyword (str "$" (subs (str v) 1))) (get field->vars k)]))
+                q2 (postwalk (fn [x] (or (m x) x)) (->datalog {:selector (:from lookup)}))]
+            (merge-with (fnil into []) q1 q2))))))
+
+(defn select [db {:keys [fields lookup] :as q}]
+  (for [results (->> (doto (->datalog q) prn)
+                     (api/q db)
+                     (partition-by first))]
+    (cond-> (api/entity db (ffirst results))
+      fields
+      (select-keys fields)
+
+      lookup
+      (assoc (:as lookup) (map (partial api/entity db) (map second results))))))
 
 (comment
   (collect-fields (->ast {:age {:$gt 9}}))

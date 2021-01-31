@@ -77,14 +77,36 @@
    {:operator :$lte, :error :invalid-selector}
    (select {:$lte 10})))
 
+(t/deftest test-lookup
+  (fix/transact! *api* [{:crux.db/id :mars :type "planet" :name "Mars"}
+                        {:crux.db/id :jon :firstName "Jon" :planet :mars}
+                        {:crux.db/id :joe :firstName "Joe" :planet :earth}
+                        {:crux.db/id :jim :firstName "Jim" :planet :mars}])
 
+;;    Mongo $lookup:
+;;      {
+;;        from: <collection to join> (would this be a ... ?),
+;;        localField: <field from the input documents>,
+;;        foreignField: <field from the documents of the "from" collection>,
+;;        as: <output array field>
+;;      }}
+
+  (t/is (= [{:crux.db/id :mars :type "planet" :name "Mars"
+             :people [{:crux.db/id :jim :firstName "Jim" :planet :mars}
+                      {:crux.db/id :jon :firstName "Jon" :planet :mars}]}]
+           (select {:type "planet"
+                    :crux.db/id {:$exists true}}
+                   {:lookup {:let {:crux.db/id :$planet}
+                             :from {:planet :$$planet}
+                             :as :people}}))))
+
+;; todo NS keywords?
 ;; todo re-add spec to AST to check for operators etc, or throw human meaninful msgs
 ;; todo in
 ;; todo elemMatch
 ;; todo fields?
-;; todo, does Couch have a test suite we can use?
-;; todo, figure out testing for 'bad' stuff, like the mango tests do
 ;; mysecretpassword
+;; use ns crux.error
 
 ;; spec options:
 ;; 1 not spec, we put asserts in the code
@@ -94,3 +116,29 @@
 ;;  {$not foo :age 10} -> [{$not foo} {:age 10}]
 
 ;; todo - barf if an operator in the field position
+
+;; a good demo is http. Just hack it tf in, maybe ask Dan or jmo how to fire up from the command line, or jdt. cba now, tired.
+
+;; db.orders.aggregate([
+;;    {
+;;       $lookup:
+;;          {
+;;            from: "warehouses",
+;;            let: { order_item: "$item", order_qty: "$ordered" },
+;;            pipeline: [
+;;               { $match:
+;;                  { $expr:
+;;                     { $and:
+;;                        [
+;;                          { $eq: [ "$stock_item",  "$$order_item" ] },
+;;                          { $gte: [ "$instock", "$$order_qty" ] }
+;;                        ]
+;;                     }
+;;                  }
+;;               },
+;;               { $project: { stock_item: 0, _id: 0 } }
+;;            ],
+;;            as: "stockdata"
+;;          }
+;;     }
+;; ])

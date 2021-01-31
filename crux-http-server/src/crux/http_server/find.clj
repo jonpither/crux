@@ -35,7 +35,6 @@
 (defn run-find [find-expr {:keys [crux-node valid-time tx-time]}]
   (let [db (util/db-for-request crux-node {:valid-time valid-time
                                            :tx-time tx-time})]
-    (println "Valid time" valid-time)
     (cs/select db find-expr)))
 
 (defn find-handler [options]

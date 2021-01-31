@@ -39,18 +39,11 @@
 (defn- and? [ast]
   (and (vector? ast) (and (= :condition (first ast)) (= :$and (second ast)))))
 
-(defn- unpack-nested-ands [ast]
-  (clojure.walk/postwalk
-   (fn [x]
-     (if (or (root? x) (and? x))
-       (conj (vec (drop-last x))
-             (reduce into []
-                     (for [x (last x)]
-                       (if (and? x)
-                         (last x)
-                         [x]))))
-       x))
-   ast))
+(def operators->datalog {:$eq '=
+                         :$gt '>
+                         :$gte '>=
+                         :$lt '<
+                         :$lte '<=})
 
 ;; Taken from calcite.clj
 (defn- ground-vars [or-statement]
@@ -58,12 +51,6 @@
     (vec
      (for [clause or-statement]
        (apply list 'and clause  (map #(vector (list 'identity %)) vars))))))
-
-(def operators->datalog {:$eq '=
-                         :$gt '>
-                         :$gte '>=
-                         :$lt '<
-                         :$lte '<=})
 
 (defn- ->where [field->vars node]
   (case (first node)
@@ -91,8 +78,26 @@
           (list 'not (apply list 'or (ground-vars sub-clauses))))))))
 
 (defn ->datalog [{:keys [selector limit offset order-by lookup]}]
-  (let [ast (unpack-nested-ands [:root (->ast selector)])
-        field->vars (into {} (map vector (collect-fields ast) (repeatedly gensym)))]
+  (let [ast (->> [:root (->ast selector)]
+
+                 ;; Unpack nested ands
+                 (clojure.walk/postwalk
+                  (fn [x]
+                    (if (or (root? x) (and? x))
+                      (conj (vec (drop-last x))
+                            (reduce into [] (for [x (last x)] (if (and? x) (last x) [x]))))
+                      x))))
+
+        field->vars (let [fields (atom #{})]
+                      (postwalk (fn [x]
+                                  (when (vector? x)
+                                    (let [[t f o v] x]
+                                      (when (and (= :field t)
+                                                 (not (and (= :$exists o) (false? v))))
+                                        (swap! fields conj f))))
+                                  x)
+                                ast)
+                      (zipmap @fields (repeatedly gensym)))]
 
     (cond-> {:find (into ['e] (mapv (fn [[k]]
                                       (field->vars k))
@@ -132,29 +137,3 @@
 
       lookup
       (assoc (:as lookup) (map (partial api/entity db) (map second results))))))
-
-(comment
-  (collect-fields (->ast {:age {:$gt 9}}))
-  (->ast {:$not {:age {:$gt 9}}})
-  (->ast {:name "Ivan"})
-
-  (->datalog {:name "Ivan"})
-  (->datalog {:$not {:name "Ivan"}})
-  (->datalog {:age {:$gt 9}})
-  (->datalog {:manager true, :user_id 7})
-
-  (->ast {:$and [{:age {:$gte 75}}]
-          :$or [{:firstName "Mathis"} {:firstName "Whitley"}]})
-
-  [[:condition :$and [[[:field :age :$gte 75]]]]
-   [:condition :$or [[[:field :firstName :$eq "Mathis"]]
-                     [[:field :firstName :$eq "Whitley"]]]]]
-
-  (->datalog {:$and [{:age {:$gte 75}}]
-              :$or [{:firstName "Mathis"} {:firstName "Whitley"}]})
-
-  (->datalog {:$and [{:name "Ivan" :surname "Bob"}]})
-
-  {:find [e], :where [[e :name G__95625]
-                      [e :surname G__95626]
-                      [[(= G__95625 "Ivan")] [(= G__95626 "Bob")]]]})

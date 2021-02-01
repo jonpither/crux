@@ -99,8 +99,8 @@
 
   (let [docs (select {:age {:$in [22 31]}})]
     (t/is (= 2 (count docs)))
-    (t/is (= 2 (count (filter #{22 31} (distinct (map :age docs))))))))
+    (t/is (= 2 (count (filter #{22 31} (distinct (map :age docs)))))))
 
-    ;;     # Limits on boolean clauses?
-    ;;     docs = self.db.find({"age": {"$in": list(range(1000))}})
-    ;;     assert len(docs) == 15
+  ;; Limits on boolean clauses?
+  (let [docs (select {:age {:$in (range 1000)}})]
+    (t/is (= 15 (count docs)))))

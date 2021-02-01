@@ -54,9 +54,19 @@
 
     :field
     (let [[_ field op literal] node]
-      (if (= :$exists op)
+      (case op
+        :$exists
         (when (not literal)
           (list 'not ['e field]))
+
+        :$in
+        [(list '== (field->vars field) (set literal))]
+        #_(list 'and
+              [[(apply list 'hash-set literal) 'x]
+               [(list '= (field->vars field) 'x)]])
+
+
+        ;; default
         [(list (operators->datalog op) (field->vars field) literal)]))
 
     :condition

@@ -2,10 +2,8 @@
   (:require [cheshire.core :as json]
             [clojure.java.io :as io]
             [clojure.test :as t]
-            [crux.api :as api]
             [crux.fixtures :as fix :refer [*api*]]
-            [crux.fixtures.select :refer [select]]
-            crux.select))
+            [crux.fixtures.select :refer [select]]))
 
 (defn- with-test-data [f]
   (let [{:keys [docs]} (json/parse-string (slurp (io/resource "data/select_test.json")) keyword)]
@@ -93,3 +91,16 @@
   (let [docs (select {:$nor [{:age 22} {:age 33}]})]
     (t/is (= 13 (count docs)))
     (t/is (= #{0 1 4 13 6 3 12 2 11 5 14 10 8} (set (map :user_id docs))))))
+
+(t/deftest test-in-value
+  (t/is (= 0 (count (select {:age {:$in [1 5]}}))))
+  (t/is (= 1 (count (select {:age {:$in [1 5 22]}}))))
+  (t/is (= 2 (count (select {:age {:$in [1 5 22 31]}}))))
+
+  (let [docs (select {:age {:$in [22 31]}})]
+    (t/is (= 2 (count docs)))
+    (t/is (= 2 (count (filter #{22 31} (distinct (map :age docs))))))))
+
+    ;;     # Limits on boolean clauses?
+    ;;     docs = self.db.find({"age": {"$in": list(range(1000))}})
+    ;;     assert len(docs) == 15

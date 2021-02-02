@@ -8,31 +8,17 @@
 (defn- operator? [k] (.startsWith (name k) "$"))
 (def field? (complement operator?))
 
-(defn- root? [ast]
-  (and (vector? ast) (and (= :root (first ast)))))
-
-(defn- and? [ast]
-  (and (vector? ast) (and (= :condition (first ast)) (= :$and (second ast)))))
-
 (defn ->ast [selector]
-  (->> (letfn [(stepfn [selector]
-                 (into []
-                       (for [[k v] selector]
-                         (if (conditions k)
-                           [:condition k (vec (mapcat stepfn (if (vector? v) v [v])))]
-                           (if (field? k)
-                             (let [[op operand] (first (if (map? v) v {:$eq v}))]
-                               (when-not (operators op)
-                                 (throw (ex-info "Invalid Query" {:error :invalid-operator :operator op})))
-                               [:field k op operand])
-                             (throw (ex-info "Invalid Query" {:error :invalid-selector :operator k})))))))]
-         (stepfn selector))
-       (vector :root)
-       (postwalk (fn [x]
-                   (if (or (root? x) (and? x))
-                     (conj (vec (drop-last x))
-                           (reduce into [] (for [x (last x)] (if (and? x) (last x) [x]))))
-                     x)))))
+  (into []
+        (for [[k v] selector]
+          (if (conditions k)
+            [:condition k (vec (mapcat ->ast (if (vector? v) v [v])))]
+            (if (field? k)
+              (let [[op operand] (first (if (map? v) v {:$eq v}))]
+                (when-not (operators op)
+                  (throw (ex-info "Invalid Query" {:error :invalid-operator :operator op})))
+                [:field k op operand])
+              (throw (ex-info "Invalid Query" {:error :invalid-selector :operator k})))))))
 
 (def operators->datalog {:$eq '=
                          :$gt '>
@@ -78,8 +64,18 @@
           :$nor
           (list 'not (apply list 'or (ground-vars sub-clauses))))))))
 
+(defn- unpack-nested-and [datalog]
+  (letfn [(unpack [x] (reduce into [] (for [x x] (if (= 'and (first x)) (rest x) [x]))))]
+    (clojure.walk/postwalk (fn [x]
+                             (if (and (map? x) (:where x))
+                               (update x :where unpack)
+                               (if (and (list? x) (= 'and (first x)))
+                                 (apply list 'and (unpack (rest x)))
+                                 x)))
+                           datalog)))
+
 (defn ->datalog [{:keys [selector limit offset order-by lookup]}]
-  (let [ast (->ast selector)
+  (let [ast [:root (->ast selector)]
         field->vars (let [fields (atom #{})]
                       (postwalk (fn [x]
                                   (when (vector? x)
@@ -121,7 +117,10 @@
                         (for [[k v] (:let lookup)]
                           [(keyword (str "$" (subs (str v) 1))) (get field->vars k)]))
                 q2 (postwalk (fn [x] (or (m x) x)) (->datalog {:selector (:from lookup)}))]
-            (merge-with (fnil into []) q1 q2))))))
+            (merge-with (fnil into []) q1 q2)))
+
+      true
+      (unpack-nested-and))))
 
 (defn select [db {:keys [fields lookup] :as q}]
   (for [results (->> (doto (->datalog q) prn)

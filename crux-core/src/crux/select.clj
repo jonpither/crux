@@ -61,10 +61,6 @@
 
         :$in
         [(list '== (field->vars field) (set literal))]
-        #_(list 'and
-              [[(apply list 'hash-set literal) 'x]
-               [(list '= (field->vars field) 'x)]])
-
 
         ;; default
         [(list (operators->datalog op) (field->vars field) literal)]))

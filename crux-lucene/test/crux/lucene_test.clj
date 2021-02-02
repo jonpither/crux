@@ -264,6 +264,21 @@
 (defmacro with-lucene-rocks-node [dir-keys & body]
   `(with-lucene-rocks-node* ~dir-keys (fn [] ~@body)))
 
+(t/deftest test-lucene-cluster-node
+  (t/testing "test restart with nil indexes"
+    (fix/with-tmp-dirs #{node-dir}
+      (fix/with-tmp-dirs #{lucene-dir}
+        (with-lucene-rocks-node {:node-dir node-dir :lucene-dir lucene-dir}
+          (submit+await-tx *api* [[:crux.tx/put {:crux.db/id :ivan :name "Ivan"}]])))
+
+      (let [old-fn crux.lucene/validate-lucene-store-up-to-date]
+        (with-redefs [crux.lucene/validate-lucene-store-up-to-date (fn [& args]
+                                                                     (Thread/sleep 1000)
+                                                                     (apply old-fn args))]
+          (fix/with-tmp-dirs #{lucene-dir}
+            (with-lucene-rocks-node {:node-dir node-dir :lucene-dir lucene-dir}
+              (t/is (= (c/entity (c/db *api*) :ivan) {:crux.db/id :ivan :name "Ivan"})))))))))
+
 (t/deftest test-lucene-node-restart
   (t/testing "test restart with nil indexes"
     (fix/with-tmp-dirs #{node-dir lucene-dir}
@@ -288,6 +303,42 @@
           (t/is (= #{[:ivan]} (c/q db {:find '[?e]
                                        :where '[[(text-search :name "Ivan") [[?e]]]
                                                 [?e :crux.db/id]]}))))))))
+
+;; (defn- with-cluster-node* [event-log-dir {:keys [node-dir index-dir lucene-dir]}  f]
+;;   (with-open [node (c/start-node (merge {:crux/document-store {:kv-store {:crux/module `rocks/->kv-store,
+;;                                                                           :db-dir (io/file event-log-dir "documents")}}
+;;                                          :crux/tx-log {:kv-store {:crux/module `rocks/->kv-store,
+;;                                                                   :db-dir (io/file event-log-dir "tx-log")}}}
+;;                                         (when lucene-dir
+;;                                           {:crux.lucene/lucene-store {:db-dir lucene-dir}})
+;;                                         (when index-dir
+;;                                           {:crux/index-store {:kv-store {:crux/module `rocks/->kv-store,
+;;                                                                          :db-dir index-dir}}})))]
+;;     (binding [*api* node]
+;;       (c/sync node)
+;;       (f))))
+
+;; (defmacro with-cluster-node [event-log-dir dir-keys & body]
+;;   `(with-cluster-node* ~dir-keys (fn [] ~@body)))
+
+#_(t/deftest test-lucene-cluster-node
+  (t/testing "test restart with nil indexes"
+
+    (fix/with-tmp-dirs #{event-log-dir}
+      (fix/with-tmp-dirs #{node-dir lucene-dir}
+        (with-cluster-node {:node-dir node-dir :lucene-dir lucene-dir}
+          (submit+await-tx *api* [[:crux.tx/put {:crux.db/id :ivan :name "Ivan"}]]))
+        (with-cluster-node {:node-dir node-dir :lucene-dir lucene-dir}
+          (t/is (= (c/entity (c/db *api*) :ivan) {:crux.db/id :ivan :name "Ivan"})))))))
+
+
+(t/deftest test-lucene-node-restart-2
+  (t/testing "test restart with nil indexes"
+    (fix/with-tmp-dirs #{node-dir lucene-dir}
+      (with-lucene-rocks-node {:node-dir node-dir :lucene-dir lucene-dir}
+        (submit+await-tx *api* [[:crux.tx/put {:crux.db/id :ivan :name "Ivan"}]]))
+      (with-lucene-rocks-node {:node-dir node-dir :lucene-dir lucene-dir}
+        (t/is (= (c/entity (c/db *api*) :ivan) {:crux.db/id :ivan :name "Ivan"}))))))
 
 (t/deftest test-id-can-be-key-1274
   (t/is (c/tx-committed? *api* (c/await-tx *api* (c/submit-tx *api* [[:crux.tx/put {:crux.db/id 512 :id "1"}]])))))

@@ -90,15 +90,19 @@
                                   x)
                                 ast)
                       (zipmap @fields (repeatedly gensym)))]
+    (cond-> {}
 
-    (cond-> {:find (into ['e] (mapv (fn [[k]]
+      true
+      (assoc :find (into ['e] (mapv (fn [[k]]
                                       (field->vars k))
-                                    (apply merge order-by)))
-             :where (into []
+                                    (apply merge order-by))))
+
+      true
+      (assoc :where (into []
                           (concat [['e :crux.db/id]]
                                   (for [[field var] field->vars]
                                     ['e field var])
-                                  (remove nil? (->where field->vars ast))))}
+                                  (remove nil? (->where field->vars ast)))))
 
       limit
       (assoc :limit limit)

@@ -83,22 +83,19 @@
                         {:crux.db/id :joe :firstName "Joe" :planet :earth}
                         {:crux.db/id :jim :firstName "Jim" :planet :mars}])
 
-;;    Mongo $lookup:
-;;      {
-;;        from: <collection to join> (would this be a ... ?),
-;;        localField: <field from the input documents>,
-;;        foreignField: <field from the documents of the "from" collection>,
-;;        as: <output array field>
-;;      }}
-
   (t/is (= [{:crux.db/id :mars :type "planet" :name "Mars"
              :people [{:crux.db/id :jim :firstName "Jim" :planet :mars}
                       {:crux.db/id :jon :firstName "Jon" :planet :mars}]}]
-           (select {:type "planet"
-                    :crux.db/id {:$exists true}}
+           (select {:type "planet"}
                    {:lookup {:let {:crux.db/id :$planet}
                              :from {:planet :$$planet}
-                             :as :people}}))))
+                             :as :people}})))
+
+  (t/is (not (seq (select {:type "planet"
+                           :crux.db/id {:$exists false}}
+                          {:lookup {:let {:crux.db/id :$planet}
+                                    :from {:planet :$$planet}
+                                    :as :people}})))))
 
 ;; todo NS keywords?
 ;; todo re-add spec to AST to check for operators etc, or throw human meaninful msgs

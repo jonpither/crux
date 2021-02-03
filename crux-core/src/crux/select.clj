@@ -113,11 +113,16 @@
 
       lookup
       (as-> q1
-          (let [m (into {'e 'e2}
-                        (for [[k v] (:let lookup)]
-                          [(keyword (str "$" (subs (str v) 1))) (get field->vars k)]))
-                q2 (postwalk (fn [x] (or (m x) x)) (->datalog {:selector (:from lookup)}))]
-            (merge-with (fnil into []) q1 q2)))
+          (let [q-let-vars (for [[k v] (:let lookup)]
+                             [k (keyword (str "$" (subs (str v) 1))) (gensym)])
+                q2-var-swap (merge {'e 'e2}
+                                   (into {}
+                                         (for [[_ v s] q-let-vars]
+                                           [v s])))
+                q2 (->> (->datalog {:selector (:from lookup)})
+                        (postwalk (fn [x] (or (q2-var-swap x) x))))]
+            (merge-with (fnil into []) q1 q2 {:where (vec (for [[k _ s] q-let-vars]
+                                                            ['e k s]))})))
 
       true
       (unpack-nested-and))))

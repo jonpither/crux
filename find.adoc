@@ -1,0 +1,115 @@
+# Crux Select
+
+This document discusses porting https://docs.couchdb.org/en/stable/api/database/find.html[Couch find], https://docs.mongodb.com/manual/reference/operator/aggregation-pipeline/[Mongo pipelines] to Crux.
+
+## Simple selector:
+
+----
+{:type "planet"}
+----
+
+----
+{:type "planet", :name "Mars"}
+----
+
+----
+{:type "planet", :name {$ne "Mars"}}
+----
+
+----
+{:type "planet", :age {$gt 10}}
+----
+
+## Full selector map:
+
+----
+{:selector {:type "planet"
+            :crux.db/id {:$exists true}}
+----
+
+## Simple selector (2):
+
+----
+{:selector {:type "planet"
+            :crux.db/id {:$exists true}
+ :order-by [:name]
+ :limit 10
+ :offset 5}
+----
+
+## Lookup
+
+----
+{:selector {:type "planet"
+            :crux.db/id {:$exists true}}
+ :lookup {:let {:crux.db/id :$planet}
+          :from {:planet :$$planet}
+          :as :people}}
+----
+
+Compared to Mongos:
+
+----
+   $lookup:
+     {
+       from: <collection to join>,
+       localField: <field from the input documents>,
+       foreignField: <field from the documents of the "from" collection>,
+       as: <output array field>
+     }
+----
+
+Notice that Mongo has the `from` defined is as a Mongo collection. We're
+spiking the idea that `from` can just be another selector.
+
+This means we can collapse `from`, `localField` and `foreignField` together.
+
+### Sort/limit/fields
+
+An issue with this - undecided how to fix - is that a normal selector
+is accompanied with fields such as `sort`, `limit` and `fields`. How
+do we handle these? Make them sibling keys of `from`?
+
+### Left Outer Joins?
+
+From
+https://docs.mongodb.com/manual/reference/operator/aggregation-pipeline/[Mongo]:
+_"Performs a left outer join to another collection in the same
+database to filter in documents from the “joined” collection for
+processing."_
+
+Our implementaton is an inner-join, not a left outer. Is this a
+problem?
+
+## Questions?
+
+Do we want to model a
+https://docs.mongodb.com/manual/reference/operator/aggregation-pipeline/[Mongo
+styled pipeline]?
+
+We could jump straight to pipelines, Mongo seems to have evolved pipelines out of the original selector.
+
+## Mongo
+
+`$looup` was added in 3.2. It was beefed up in 3.6: _To perform
+uncorrelated subqueries between two collections as well as allow other
+join conditions besides a single equality match, the $lookup stage has
+the following syntax:_
+
+----
+{
+   $lookup:
+     {
+       from: <collection to join>,
+       let: { <var_1>: <expression>, …, <var_n>: <expression> },
+       pipeline: [ <pipeline to execute on the collection to join> ],
+       as: <output array field>
+     }
+}
+----
+
+The main difference here the addition of `pipeline`, with `let`.
+
+* Pipeline: Specifies the pipeline to run on the joined collection.
+
+Additional `lookups` can be nested in the pipeline.

@@ -1,0 +1,36 @@
+[source,clojure]
+----
+curl -X POST \
+     -H "Content-Type: application/json" \
+     -H "Accept: application/json" \
+     -d '{"selector": {"name": "Ivan"}}' \
+     $CRUX_URL/_crux/find
+
+
+curl -X POST \
+     -H "Content-Type: application/json" \
+     -H "Accept: application/json" \
+     -d '{"selector": {"age": {"$gt": 8}}}' \
+     $CRUX_URL/_crux/find
+----
+
+
+
+
+curl -X POST \
+     -H "Content-Type: application/json" \
+     -H "Accept: application/json" \
+     -d '{"tx-ops": [["put", {"crux.db/id": "ivan", "name": "Ivan", "last-name": "Petrov" , "age": 10}]]}' \
+     $CRUX_URL/_crux/submit-tx
+
+
+
+curl -X POST \
+     -H "Content-Type: application/json" \
+     -H "Accept: application/json" \
+     -d '{"tx-ops": [["put", {"crux.db/id": "fred", "name": "Fred", "last-name": "Smith", "age": 40}]]}' \
+     $CRUX_URL/_crux/submit-tx
+
+
+https://docs.couchdb.org/en/stable/api/database/find.html
+https://docs.mongodb.com/manual/reference/operator/aggregation/lookup/

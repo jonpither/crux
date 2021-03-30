@@ -2,6 +2,7 @@
   (:require [clojure.java.io :as io]
             [clojure.spec.alpha :as s]
             [clojure.test :as t]
+            [crux.db :as db]
             [crux.api :as c]
             [crux.fixtures :as fix :refer [*api* submit+await-tx]]
             [crux.fixtures.lucene :as lf]
@@ -377,8 +378,16 @@
     (t/is (= 1001 (count (c/q db {:find '[?e]
                                   :where '[[(text-search :description "Entity*") [[?e]]]]}))))))
 
-(comment
-  (do
-    (import '[ch.qos.logback.classic Level Logger]
-            'org.slf4j.LoggerFactory)
-    (.setLevel ^Logger (LoggerFactory/getLogger "crux.lucene") (Level/valueOf "INFO"))))
+(t/deftest test-handle-incorrect-match-1456
+  (submit+await-tx [[:crux.tx/put {:crux.db/id :test-id :name "1234"}]])
+  (submit+await-tx [[:crux.tx/match :test-id {:crux.db/id :test-id}]
+                    [:crux.tx/put {:crux.db/id :test-id :name "2345"}]])
+
+  (t/is (= (:crux.tx/tx-id (db/latest-completed-tx (:crux/index-store @(:!system *api*))))
+           (l/latest-submitted-tx (:crux.lucene/lucene-store @(:!system *api*))))
+
+        (comment
+          (do
+            (import '[ch.qos.logback.classic Level Logger]
+                    'org.slf4j.LoggerFactory)
+            (.setLevel ^Logger (LoggerFactory/getLogger "crux.lucene") (Level/valueOf "INFO"))))))
